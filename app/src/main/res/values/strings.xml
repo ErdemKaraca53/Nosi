@@ -1,3 +1,9 @@
 <resources>
     <string name="app_name">Nosi</string>
+    <string name="main_up">Start a New Practice</string>
+    <string name="main_middle">Daily Practice</string>
+    <string name="main_middle2">Improve your vocabulary with daily exercises.</string>
+    <string name="RowTextText">150 words</string>
+    <string name="RowTextTitle">Recorded Words</string>
+    <string name="CollectionTitleMyWord">My Words</string>
 </resources>
