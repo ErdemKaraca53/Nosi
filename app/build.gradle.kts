@@ -57,4 +57,6 @@ dependencies {
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
     implementation("androidx.compose.ui:ui-text-google-fonts:1.9.4")
+    val nav_version = "2.9.6"
+    implementation("androidx.navigation:navigation-compose:${nav_version}")
 }
