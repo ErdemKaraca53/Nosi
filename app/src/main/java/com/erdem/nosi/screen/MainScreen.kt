@@ -211,11 +211,8 @@ fun ScaffoldExample() {
                     "Title",
                     "Word count"
                 )
-
             }
-
         }
-
     }
 }
 
@@ -245,7 +242,6 @@ fun TopBar() {
                     contentDescription = "Ayarlar",
                 )
             }
-
         },
         colors = topAppBarColors(
             containerColor = TopBarColor,
@@ -327,8 +323,6 @@ fun IconBox2Row(@DrawableRes id: Int) {
         )
     }
 }
-
-
 
 @Preview(showBackground = true)
 @Composable
