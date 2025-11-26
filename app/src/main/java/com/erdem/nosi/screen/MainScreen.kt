@@ -21,6 +21,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults.topAppBarColors
@@ -43,6 +44,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import com.erdem.nosi.R
 import com.erdem.nosi.ui.theme.Black
@@ -72,6 +74,11 @@ fun Greeting(name: String, modifier: Modifier = Modifier) {
         text = "Hello $name!",
         modifier = modifier
     )
+}
+
+fun NavHost(navController: NavController) {
+    //composable<Profile> { ProfileScreen( /* ... */ ) }
+    //composable<FriendsList> { FriendsListScreen( /* ... */ ) }
 }
 
 @Composable
@@ -322,12 +329,6 @@ fun IconBox2Row(@DrawableRes id: Int) {
     }
 }
 
-@Composable
-fun WordsRow() {
-
-
-
-}
 
 
 @Preview(showBackground = true)
