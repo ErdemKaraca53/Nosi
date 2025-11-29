@@ -15,6 +15,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Divider
+import androidx.compose.material3.DividerDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -40,6 +43,8 @@ import androidx.compose.ui.unit.sp
 import com.erdem.nosi.R
 import com.erdem.nosi.ui.theme.AiTutorTextColor
 import com.erdem.nosi.ui.theme.MainBackgroundrColor
+import com.erdem.nosi.ui.theme.PurpleGrey40
+import com.erdem.nosi.ui.theme.SelectedTranslete
 import com.erdem.nosi.ui.theme.TranslationContainerBackground
 import com.erdem.nosi.ui.theme.White
 
@@ -68,11 +73,19 @@ fun TranslationScaffol() {
                 .fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            //Üst kısımdaki ai bilgilendirme mesajı
             AiInfo()
+            TransletedSentence()
         }
     }
 }
-
+/**
+ * Ai tutor tasarımı,  ai bilgilendirme mesajı
+ *
+ * @param text TopBar üzerindeki text yazısı
+ * @param id TopBar üzerindeki logo
+ * @return IconDescription logonun description texti.
+ */
 @Composable
 fun AiInfo() {
     Row(
@@ -90,14 +103,15 @@ fun AiInfo() {
             contentScale = ContentScale.Crop
         )
         Column(
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.wrapContentSize()
         ) {
             Text(
                 modifier = Modifier
                     .padding(start = 12.dp),
                 text = stringResource(R.string.AiTextTitle),
                 color = AiTutorTextColor,
-                fontSize = 16.sp
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
             )
             Surface(
                 modifier = Modifier
@@ -120,6 +134,81 @@ fun AiInfo() {
         }
 
     }
+
+}
+
+@Composable
+fun TextSurface(modifier: Modifier) {
+    Surface(
+        modifier = Modifier
+            .padding(start = 12.dp, top = 8.dp, bottom = 12.dp, end = 20.dp)
+            .wrapContentHeight()
+            .fillMaxWidth()/*Padding for surface*/,
+        color = SelectedTranslete,
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Text(
+            modifier = Modifier.padding(16.dp),
+            text = "Which color do you like most",
+            color = White,
+            fontSize = 16.sp,
+            textAlign = TextAlign.Start,
+            lineHeight = TextUnit.Unspecified,
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+@Composable
+fun TransletedSentence() {
+
+    Surface(
+        modifier = Modifier
+            .padding(start = 12.dp, top = 8.dp, bottom = 12.dp, end = 20.dp)
+            .wrapContentHeight()
+            .fillMaxWidth()/*Padding for surface*/,
+        color = TranslationContainerBackground,
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+
+        ) {
+            Text(
+                modifier = Modifier.padding(16.dp),
+                text = stringResource(R.string.text),
+                color = AiTutorTextColor,
+                fontSize = 16.sp,
+                textAlign = TextAlign.Start,
+                lineHeight = TextUnit.Unspecified,
+                fontWeight = FontWeight.Bold
+            )
+
+            Text(
+                modifier = Modifier.padding(start = 16.dp, bottom = 16.dp, end = 16.dp),
+                text = "What is your favorite color",
+                color = White,
+                fontSize = 20.sp,
+                textAlign = TextAlign.Start,
+                lineHeight = TextUnit.Unspecified,
+            )
+            HorizontalDivider(
+                Modifier.padding(start = 16.dp, end = 16.dp),
+                DividerDefaults.Thickness,
+                DividerDefaults.color
+            )
+            Text(
+                modifier = Modifier.padding(16.dp),
+                text = "Alternative english Sentences",
+                color = White,
+                fontSize = 20.sp,
+                textAlign = TextAlign.Start,
+                lineHeight = TextUnit.Unspecified,
+            )
+            TextSurface(modifier = Modifier)
+
+        }
+    }
+
 
 }
 
