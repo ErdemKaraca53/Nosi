@@ -6,4 +6,8 @@
     <string name="RowTextText">150 words</string>
     <string name="RowTextTitle">Recorded Words</string>
     <string name="CollectionTitleMyWord">My Words</string>
+    <string name="AiTextTitle">Ai Tutor</string>
+    <string name="AiText">Enter an English word, an English
+sentence, or a sentence in your
+native language to get started.</string>
 </resources>
