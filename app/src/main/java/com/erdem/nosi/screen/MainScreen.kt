@@ -89,7 +89,11 @@ fun ScaffoldExample() {
 
     Scaffold(
         topBar = {
-            TopBar()
+            TopBar(
+                "WordWise",
+                R.drawable.ayarlar_simge,
+                "Ayarlar"
+            )
         },
         bottomBar = {
             BottomAppBar(
@@ -216,9 +220,18 @@ fun ScaffoldExample() {
     }
 }
 
+/**
+ * TopBar tasarımı
+ *
+ *
+ *
+ * @param text TopBar üzerindeki text yazısı
+ * @param id TopBar üzerindeki logo
+ * @return IconDescription logonun description texti.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TopBar() {
+fun TopBar(text: String, @DrawableRes id: Int, IconDescription: String) {
 //Bunun sayesinde text tam ortalanıyor
     CenterAlignedTopAppBar(
         title = {
@@ -228,7 +241,7 @@ fun TopBar() {
             ) {
                 Text(
                     modifier = Modifier.align(Alignment.Center),
-                    text = "WordWise",
+                    text = text,
                     fontSize = 18.sp,
                     textAlign = TextAlign.Center,
                     fontWeight = FontWeight.Bold,
@@ -238,8 +251,8 @@ fun TopBar() {
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
                         .padding(end = 12.dp),
-                    painter = painterResource(id = R.drawable.ayarlar_simge),
-                    contentDescription = "Ayarlar",
+                    painter = painterResource(id = id),
+                    contentDescription = IconDescription,
                 )
             }
         },
