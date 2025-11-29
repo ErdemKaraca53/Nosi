@@ -23,3 +23,6 @@ val RowTextColor = Color(0xFFC9BA91)
 
 val BottomAppBarBackground = Color(0xFF332B1A)
 val BottomAppBarContent = Color(0xFFC9BA91)
+
+val AiTutorTextColor = Color(0xFF92b7c9)
+val TranslationContainerBackground = Color(0xFF233C48)
