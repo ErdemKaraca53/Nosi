@@ -81,7 +81,7 @@ fun NavHost(navController: NavController) {
 }
 
 @Composable
-fun ScaffoldExample() {
+fun MainScaffold() {
 
     val navController = rememberNavController()
 
@@ -341,6 +341,6 @@ fun IconBox2Row(@DrawableRes id: Int) {
 @Composable
 fun GreetingPreview() {
     NosiTheme {
-        ScaffoldExample()
+        MainScaffold()
     }
 }

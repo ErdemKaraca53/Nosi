@@ -4,7 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import com.erdem.nosi.screen.ScaffoldExample
+import com.erdem.nosi.screen.MainScaffold
 import com.erdem.nosi.ui.theme.NosiTheme
 
 class MainActivity : ComponentActivity() {
@@ -13,7 +13,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             NosiTheme {
-                ScaffoldExample()
+                MainScaffold()
             }
         }
     }
