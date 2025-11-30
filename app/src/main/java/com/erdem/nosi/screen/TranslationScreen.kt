@@ -15,8 +15,11 @@ import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DividerDefaults
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SelectableChipColors
+import androidx.compose.material3.SelectableChipElevation
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -231,7 +235,7 @@ fun TransletedSentence() {
                 DividerDefaults.color
             )
             Text(
-                modifier = Modifier.padding(16.dp),
+                modifier = Modifier.padding(top = 16.dp, start = 16.dp, end = 16.dp),
                 text = "Breakdown for \"Which color do you like the most?\"",
                 color = Color(0xFF9CA3AF),
                 fontSize = 15.sp,
@@ -240,10 +244,60 @@ fun TransletedSentence() {
                 fontWeight = FontWeight.SemiBold,
                 fontFamily = LexendFontFamily
             )
+            val words = listOf("Which", "color", "do", "you", "like", "most")
+            FlowRowSimpleUsageExample(words)
         }
     }
 }
 
+@Composable
+private fun FlowRowSimpleUsageExample(list: List<String>) {
+    FlowRow(
+        modifier = Modifier
+            .padding(8.dp),
+    ) {
+
+        list.forEachIndexed { index, word ->
+            FilterChipExample(word)
+        }
+
+    }
+}
+
+@Composable
+fun FilterChipExample(text: String) {
+    var selected by remember { mutableStateOf(false) }
+    val cornerRadius = 64.dp
+    FilterChip(
+        modifier = Modifier.padding(start = 4.dp , end = 4.dp),
+        onClick = { selected = !selected },
+        label = {
+            Text(
+                text = text,
+                fontFamily = LexendFontFamily,
+                color = Color(0xFFE5E7EB),
+                fontSize = 16.sp
+            )
+        },
+        // RENK AYARLARI BURADA YAPILIYOR:
+        colors = FilterChipDefaults.filterChipColors(
+            // 1. Seçildiğindeki Arka Plan Rengi
+            selectedContainerColor = Color(0xFFD0BB95),
+
+            // 2. Seçildiğindeki Yazı ve İkon Rengi
+            selectedLabelColor = Color.White,
+            selectedLeadingIconColor = Color.White,
+
+            // 3. Seçili DEĞİLKENki Arka Plan Rengi (İsteğe bağlı)
+            containerColor = Color(0xFF374151),
+
+            // 4. Seçili DEĞİLKENki Yazı Rengi (İsteğe bağlı)
+            labelColor = Color.LightGray
+        ),
+        shape = RoundedCornerShape(cornerRadius),
+        selected = selected,
+    )
+}
 
 @Preview(showBackground = true)
 @Composable
