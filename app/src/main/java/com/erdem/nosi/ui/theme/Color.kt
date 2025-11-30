@@ -25,5 +25,9 @@ val BottomAppBarBackground = Color(0xFF332B1A)
 val BottomAppBarContent = Color(0xFFC9BA91)
 
 val AiTutorTextColor = Color(0xFF92b7c9)
-val TranslationContainerBackground = Color(0xFF233C48)
-val SelectedTranslete = Color(0xFFD0BB95)
+val TranslationContainerBackground = Color(0xFF1A2831)
+
+val SelectedTransleteContainer = Color(0x33D0BB95) // %20 görünürlük
+val SelectedTransleteText = Color(0xFFD0BB95)
+val UnSelectedTransleteContainer = Color(0x99374151)
+val UnSelectedTransleteText = Color(0xFFE5E7EB)
