@@ -1,5 +1,6 @@
 package com.erdem.nosi.screen
 
+import android.util.MutableInt
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -23,6 +24,7 @@ import androidx.compose.material3.SelectableChipElevation
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -252,25 +254,39 @@ fun TransletedSentence() {
 
 @Composable
 private fun FlowRowSimpleUsageExample(list: List<String>) {
+
+    var selectedIndex by remember { mutableIntStateOf(0) }
+
     FlowRow(
         modifier = Modifier
             .padding(8.dp),
     ) {
-
+        //seçilen indexi burada kontrol ediyoruz.
+        //FilterChipExample içerisinde yapmak compose'a uygun değilmiş --> Gemini
         list.forEachIndexed { index, word ->
-            FilterChipExample(word)
+            val isSelected = (index == selectedIndex)
+            FilterChipExample(
+                text = word,
+                isSelected = isSelected,
+                onSelect = {
+                    if (selectedIndex == index) {
+                        selectedIndex = -1
+                    } else {
+                        selectedIndex = index
+                    }
+                }
+            )
         }
 
     }
 }
 
 @Composable
-fun FilterChipExample(text: String) {
-    var selected by remember { mutableStateOf(false) }
+fun FilterChipExample(text: String, isSelected: Boolean, onSelect: ()-> Unit) {
     val cornerRadius = 64.dp
     FilterChip(
         modifier = Modifier.padding(start = 4.dp , end = 4.dp),
-        onClick = { selected = !selected },
+        onClick = onSelect,
         label = {
             Text(
                 text = text,
@@ -295,7 +311,7 @@ fun FilterChipExample(text: String) {
             labelColor = Color.LightGray
         ),
         shape = RoundedCornerShape(cornerRadius),
-        selected = selected,
+        selected = isSelected,
     )
 }
 
