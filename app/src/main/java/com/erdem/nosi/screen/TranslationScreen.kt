@@ -13,7 +13,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DividerDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -30,6 +32,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.tooling.SourceInformation
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -81,7 +85,8 @@ fun TranslationScaffol() {
                 .background(
                     color = MainBackgroundrColor
                 )
-                .fillMaxSize(),
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             //Üst kısımdaki ai bilgilendirme mesajı
@@ -127,7 +132,7 @@ fun AiInfo() {
             )
             Surface(
                 modifier = Modifier
-                    .padding(start = 12.dp, top = 8.dp, bottom = 12.dp, end = 20.dp)
+                    .padding(start = 12.dp, top = 8.dp, bottom = 4.dp, end = 20.dp)
                     .wrapContentHeight()
                     .fillMaxWidth()/*Padding for surface*/,
                 color = Color(0xFF233C48),
@@ -177,7 +182,7 @@ fun TransletedSentence() {
 
     Surface(
         modifier = Modifier
-            .padding(start = 12.dp, top = 8.dp, bottom = 12.dp, end = 20.dp)
+            .padding(start = 12.dp, top = 0.dp, bottom = 12.dp, end = 20.dp)
             .wrapContentHeight()
             .fillMaxWidth()/*Padding for surface*/,
         color = TranslationContainerBackground,
@@ -246,16 +251,33 @@ fun TransletedSentence() {
                 fontWeight = FontWeight.SemiBold,
                 fontFamily = LexendFontFamily
             )
+
             val words = listOf("Which", "color", "do", "you", "like", "most")
-            FlowRowSimpleUsageExample(words)
+            var selectedIndex by remember { mutableIntStateOf(0) }
+            FlowRowSimpleUsageExample(
+                list = words,
+                selectedIndex = selectedIndex,
+                onSelectedIndexChange = { selectedIndex = it }
+            )
+            HorizontalDivider(
+                Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp),
+                DividerDefaults.Thickness,
+                DividerDefaults.color
+            )
+            WordExplanation(
+                word = words.get(selectedIndex),
+                wordInformation = "",
+                wordExplanation = "")
         }
     }
 }
 
 @Composable
-private fun FlowRowSimpleUsageExample(list: List<String>) {
-
-    var selectedIndex by remember { mutableIntStateOf(0) }
+private fun FlowRowSimpleUsageExample(
+    list: List<String>,
+    selectedIndex:Int,
+    onSelectedIndexChange: (Int) -> Unit
+) {
 
     FlowRow(
         modifier = Modifier
@@ -270,14 +292,13 @@ private fun FlowRowSimpleUsageExample(list: List<String>) {
                 isSelected = isSelected,
                 onSelect = {
                     if (selectedIndex == index) {
-                        selectedIndex = -1
+                        onSelectedIndexChange(-1)
                     } else {
-                        selectedIndex = index
+                        onSelectedIndexChange(index)
                     }
                 }
             )
         }
-
     }
 }
 
@@ -315,6 +336,46 @@ fun FilterChipExample(text: String, isSelected: Boolean, onSelect: ()-> Unit) {
     )
 }
 
+@Composable
+fun WordExplanation(
+    word: String,
+    wordInformation: String,
+    wordExplanation: String) {
+
+    //Ana kelime
+    Text(
+        modifier = Modifier
+            .padding(top = 20.dp, start = 16.dp ),
+        text = word,
+        color = White,
+        fontSize = 24.sp,
+        fontFamily = LexendFontFamily,
+        fontWeight = FontWeight.Bold
+    )
+    //Kelime telafuzu ve kelimenin türü
+    Text(
+        modifier = Modifier
+            .padding(top = 8.dp, start = 16.dp ),
+        text = "/wɪtʃ/ | Determiner, Pronoun", //wordInformation
+        color = Color(0xFF9CA3AF),
+        fontSize = 16.sp,
+        fontFamily = LexendFontFamily,
+        fontWeight = FontWeight.Normal
+    )
+    //Kelimenin kelime anlamı.
+    Text(
+        modifier = Modifier
+            .padding(16.dp),
+        text = "Asking for information specifying one or" +
+                " more people or things from a definite set.", //wordInformation
+        color = Color(0xFFE5E7EB),
+        fontSize = 18.sp,
+        fontFamily = LexendFontFamily,
+        fontWeight = FontWeight.Normal,
+        textAlign = TextAlign.Start
+    )
+
+}
 @Preview(showBackground = true)
 @Composable
 fun TranslationPreview() {
