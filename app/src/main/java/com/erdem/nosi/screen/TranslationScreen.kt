@@ -1,5 +1,6 @@
 package com.erdem.nosi.screen
 
+import android.util.Log
 import android.util.MutableInt
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -58,14 +59,107 @@ import com.erdem.nosi.ui.theme.TranslationContainerBackground
 import com.erdem.nosi.ui.theme.UnSelectedTransleteContainer
 import com.erdem.nosi.ui.theme.UnSelectedTransleteText
 import com.erdem.nosi.ui.theme.White
+import com.google.firebase.Firebase
+import com.google.firebase.ai.GenerativeModel
+import com.google.firebase.ai.ai
+import com.google.firebase.ai.type.GenerativeBackend
+import com.google.firebase.ai.type.Schema
+import com.google.firebase.ai.type.generationConfig
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.launch
 
 val LexendFontFamily = FontFamily(
     Font(R.font.lexend)
 )
 
+
+// Initialize the Gemini Developer API backend service
+// Create a `GenerativeModel` instance with a model that supports your use case
+val model = Firebase.ai(backend= GenerativeBackend.googleAI())
+    .generativeModel("gemini-2.0-flash")
+
+// Initialize the Vertex AI Gemini API backend service
+// Create a `GenerativeModel` instance with a model that supports your use case
+// val model = Firebase.ai(backend=GenerativeBackend.vertexAI())
+//     .generativeModel("gemini-2.0-flash")
+
+
+// Provide a prompt that contains text
+val prompt = "Write a story about a magic backpack."
+
+// To generate text output, call generateContent with the text input
+
+
+fun modelCall() {
+
+    val translationSchema = Schema.obj(
+        mapOf(
+            "sentence" to Schema.string(),                 // Orijinal Türkçe cümle
+            "translatedSentence" to Schema.string(),       // İngilizce çeviri
+            "translatedWords" to Schema.array(             // İngilizce kelimelerin analizi
+                Schema.obj(
+                    mapOf(
+                        "word" to Schema.string(),
+                        "lemma" to Schema.string(),
+                        // İngilizce için kelime türlerini genişlettik:
+                        "type" to Schema.enumeration(listOf(
+                            "noun",
+                            "verb",
+                            "adj",
+                            "adv",
+                            "interjection",
+                            "pronoun",      // "I", "he" için gerekli
+                            "preposition",  // "on", "at" için gerekli
+                            "conjunction",  // "and", "but" için gerekli
+                            "determiner"    // "the", "a" için gerekli
+                        )),
+                        "meanings" to Schema.array(Schema.string()),
+                        "examples" to Schema.array(Schema.string())
+                    )
+                )
+            )
+        )
+    )
+
+    val model = Firebase.ai(backend= GenerativeBackend.googleAI())
+        .generativeModel("gemini-2.0-flash",
+                // In the generation config, set the `responseMimeType` to `application/json`
+                // and pass the JSON schema object into `responseSchema`.
+                generationConfig = generationConfig {
+            responseMimeType = "application/json"
+            responseSchema = translationSchema
+        })
+
+    MainScope().launch {
+        val inputSentence = "Dün akşam ayağım takıldı"
+
+        // ÖNEMLİ: Modele ne yapması gerektiğini açıkça söyleyen Prompt
+        val prompt = """
+            Translate the following Turkish sentence to English: "$inputSentence"
+            
+            Instructions:
+            1. Set 'sentence' to the original Turkish sentence.
+            2. Set 'translatedSentence' to the English translation.
+            3. Populate 'translatedWords' by analyzing the words ONLY from the English translation.
+        """.trimIndent()
+
+        try {
+            val response = model.generateContent(prompt)
+            // Sonucu logluyoruz
+            Log.e("erdemii", response.text ?: "No response text")
+        } catch (e: Exception) {
+            Log.e("erdemii", "Error: ${e.message}")
+        }
+    }
+
+}
+
+
 @Composable
 fun TranslationScaffol() {
     var presses by remember { mutableIntStateOf(0) }
+
+    modelCall()
 
     Scaffold(
         topBar = {
