@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.google.gms.google.services)
+    kotlin("plugin.serialization") version "2.0.0"
 }
 
 android {
@@ -61,4 +62,5 @@ dependencies {
     implementation("androidx.compose.ui:ui-text-google-fonts:1.9.4")
     val nav_version = "2.9.6"
     implementation("androidx.navigation:navigation-compose:${nav_version}")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
 }
