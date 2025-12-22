@@ -108,7 +108,7 @@ fun sendRequest() {
                 contents = listOf(
                     Content(
                         parts = listOf(
-                            Part(text = "Retrofit nedir?")
+                            Part(text = "text: Girdi cümlesi: 'Dün akşam ayağım kaydı.' Bu cümleyi İngilizceye ayrı ayrı 3 cümle olarak çevir ve analiz et.")
                         )
                     )
                 )
