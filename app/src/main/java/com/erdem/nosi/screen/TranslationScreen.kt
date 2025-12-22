@@ -51,6 +51,11 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.erdem.nosi.R
+import com.erdem.nosi.data.Content
+import com.erdem.nosi.data.GeminiRequest
+import com.erdem.nosi.data.Part
+import com.erdem.nosi.request.ApiInterface
+import com.erdem.nosi.request.RetrofitInstance
 import com.erdem.nosi.ui.theme.AiTutorTextColor
 import com.erdem.nosi.ui.theme.MainBackgroundrColor
 import com.erdem.nosi.ui.theme.SelectedTransleteContainer
@@ -65,6 +70,7 @@ import com.google.firebase.ai.ai
 import com.google.firebase.ai.type.GenerativeBackend
 import com.google.firebase.ai.type.Schema
 import com.google.firebase.ai.type.generationConfig
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
 
@@ -76,7 +82,7 @@ val LexendFontFamily = FontFamily(
 // Initialize the Gemini Developer API backend service
 // Create a `GenerativeModel` instance with a model that supports your use case
 val model = Firebase.ai(backend= GenerativeBackend.googleAI())
-    .generativeModel("gemini-2.0-flash")
+    .generativeModel("gemini-2.5-flash")
 
 // Initialize the Vertex AI Gemini API backend service
 // Create a `GenerativeModel` instance with a model that supports your use case
@@ -88,6 +94,43 @@ val model = Firebase.ai(backend= GenerativeBackend.googleAI())
 val prompt = "Write a story about a magic backpack."
 
 // To generate text output, call generateContent with the text input
+private lateinit var apiInterface: ApiInterface
+private fun getApiInterface() {
+    apiInterface = RetrofitInstance.getInstance().create(ApiInterface::class.java)
+}
+
+fun sendRequest() {
+    apiInterface = RetrofitInstance.getInstance().create(ApiInterface::class.java)
+    GlobalScope.launch {
+
+        try {
+            val request = GeminiRequest(
+                contents = listOf(
+                    Content(
+                        parts = listOf(
+                            Part(text = "Retrofit nedir?")
+                        )
+                    )
+                )
+            )
+            val url =
+                "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+            val result = apiInterface.generateContent(
+                url,
+                request = request,
+                apiKey = ""
+            )
+
+            Log.d("GEMINI", result.toString())
+
+        } catch (e: Exception) {
+            Log.e("GEMINI_ERROR", e.message ?: "Unknown error")
+        }
+    }
+}
+
+
+
 
 
 fun modelCall() {
@@ -136,11 +179,7 @@ fun modelCall() {
         // ÖNEMLİ: Modele ne yapması gerektiğini açıkça söyleyen Prompt
         val prompt = """
             Translate the following Turkish sentence to English: "$inputSentence"
-            
-            Instructions:
-            1. Set 'sentence' to the original Turkish sentence.
-            2. Set 'translatedSentence' to the English translation.
-            3. Populate 'translatedWords' by analyzing the words ONLY from the English translation.
+
         """.trimIndent()
 
         try {
@@ -159,8 +198,8 @@ fun modelCall() {
 fun TranslationScaffol() {
     var presses by remember { mutableIntStateOf(0) }
 
-    modelCall()
-
+    //modelCall()
+    sendRequest()
     Scaffold(
         topBar = {
             TopBar(
