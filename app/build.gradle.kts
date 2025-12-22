@@ -63,4 +63,8 @@ dependencies {
     val nav_version = "2.9.6"
     implementation("androidx.navigation:navigation-compose:${nav_version}")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+    // retrofit
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    // gson converter
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
 }
