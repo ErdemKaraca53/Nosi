@@ -1,7 +1,6 @@
 package com.erdem.nosi.screen
 
 import android.util.Log
-import android.util.MutableInt
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -22,23 +21,17 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SelectableChipColors
-import androidx.compose.material3.SelectableChipElevation
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.tooling.SourceInformation
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -50,11 +43,11 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.erdem.nosi.R
 import com.erdem.nosi.data.Content
 import com.erdem.nosi.data.GeminiRequest
 import com.erdem.nosi.data.Part
-import com.erdem.nosi.request.ApiInterface
 import com.erdem.nosi.request.RetrofitInstance
 import com.erdem.nosi.ui.theme.AiTutorTextColor
 import com.erdem.nosi.ui.theme.MainBackgroundrColor
@@ -65,141 +58,96 @@ import com.erdem.nosi.ui.theme.UnSelectedTransleteContainer
 import com.erdem.nosi.ui.theme.UnSelectedTransleteText
 import com.erdem.nosi.ui.theme.White
 import com.google.firebase.Firebase
-import com.google.firebase.ai.GenerativeModel
 import com.google.firebase.ai.ai
 import com.google.firebase.ai.type.GenerativeBackend
 import com.google.firebase.ai.type.Schema
 import com.google.firebase.ai.type.generationConfig
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.MainScope
-import kotlinx.coroutines.launch
 
 val LexendFontFamily = FontFamily(
     Font(R.font.lexend)
 )
 
+val apiService = RetrofitInstance.api
 
-// Initialize the Gemini Developer API backend service
-// Create a `GenerativeModel` instance with a model that supports your use case
-val model = Firebase.ai(backend= GenerativeBackend.googleAI())
-    .generativeModel("gemini-2.5-flash")
+fun CreatePrompt(inputSentence: String): String {
+    val safeInput = inputSentence.replace("\"", "\\\"")
 
-// Initialize the Vertex AI Gemini API backend service
-// Create a `GenerativeModel` instance with a model that supports your use case
-// val model = Firebase.ai(backend=GenerativeBackend.vertexAI())
-//     .generativeModel("gemini-2.0-flash")
+    return """
+        
+        Sana bir türkçe cümle vereceğim. Bu cümleyi ingilizceye çevir. İngilizce karşılığı olan
+        cümlenin her kelimesini aşağıdaki json formatına uygun şekilde response olarak döndür
 
-
-// Provide a prompt that contains text
-val prompt = "Write a story about a magic backpack."
-
-// To generate text output, call generateContent with the text input
-private lateinit var apiInterface: ApiInterface
-private fun getApiInterface() {
-    apiInterface = RetrofitInstance.getInstance().create(ApiInterface::class.java)
-}
-
-fun sendRequest() {
-    apiInterface = RetrofitInstance.getInstance().create(ApiInterface::class.java)
-    GlobalScope.launch {
-
-        try {
-            val request = GeminiRequest(
-                contents = listOf(
-                    Content(
-                        parts = listOf(
-                            Part(text = "text: Girdi cümlesi: 'Dün akşam ayağım kaydı.' Bu cümleyi İngilizceye ayrı ayrı 3 cümle olarak çevir ve analiz et.")
-                        )
-                    )
-                )
-            )
-            val url =
-                "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
-            val result = apiInterface.generateContent(
-                url,
-                request = request,
-                apiKey = ""
-            )
-
-            Log.d("GEMINI", result.toString())
-
-        } catch (e: Exception) {
-            Log.e("GEMINI_ERROR", e.message ?: "Unknown error")
+        JSON Schema:
+        {
+          "sourceLanguage": "tr",
+          "targetLanguage": "en",
+          {
+            "translations": [
+              {
+                "translatedSentence": "string",
+                "words": [
+                  {
+                    "word": "string",
+                    "pos": "string",
+                    "meaningTr": "string"
+                  }
+                ]
+              }
+            ]
+          }
         }
-    }
+
+
+        Input sentence (Turkish):
+        "$safeInput"
+    """.trimIndent()
 }
 
 
 
-
-
-fun modelCall() {
-
-    val translationSchema = Schema.obj(
-        mapOf(
-            "sentence" to Schema.string(),                 // Orijinal Türkçe cümle
-            "translatedSentence" to Schema.string(),       // İngilizce çeviri
-            "translatedWords" to Schema.array(             // İngilizce kelimelerin analizi
-                Schema.obj(
-                    mapOf(
-                        "word" to Schema.string(),
-                        "lemma" to Schema.string(),
-                        // İngilizce için kelime türlerini genişlettik:
-                        "type" to Schema.enumeration(listOf(
-                            "noun",
-                            "verb",
-                            "adj",
-                            "adv",
-                            "interjection",
-                            "pronoun",      // "I", "he" için gerekli
-                            "preposition",  // "on", "at" için gerekli
-                            "conjunction",  // "and", "but" için gerekli
-                            "determiner"    // "the", "a" için gerekli
-                        )),
-                        "meanings" to Schema.array(Schema.string()),
-                        "examples" to Schema.array(Schema.string())
-                    )
+suspend fun ApiRequest(): String {
+    val prompt = CreatePrompt("Sence yapay zekalar dünyayı ele geçirecek mi?")
+    val request = GeminiRequest(
+        contents = listOf(
+            Content(
+                parts = listOf(
+                    Part(text = prompt)
                 )
             )
         )
     )
 
-    val model = Firebase.ai(backend= GenerativeBackend.googleAI())
-        .generativeModel("gemini-2.0-flash",
-                // In the generation config, set the `responseMimeType` to `application/json`
-                // and pass the JSON schema object into `responseSchema`.
-                generationConfig = generationConfig {
-            responseMimeType = "application/json"
-            responseSchema = translationSchema
-        })
+    val response = apiService.generateContent(
+        model = "gemini-2.5-flash",
+        apiKey = "",
+        request = request
+    )
 
-    MainScope().launch {
-        val inputSentence = "Dün akşam ayağım takıldı"
-
-        // ÖNEMLİ: Modele ne yapması gerektiğini açıkça söyleyen Prompt
-        val prompt = """
-            Translate the following Turkish sentence to English: "$inputSentence"
-
-        """.trimIndent()
-
-        try {
-            val response = model.generateContent(prompt)
-            // Sonucu logluyoruz
-            Log.e("erdemii", response.text ?: "No response text")
-        } catch (e: Exception) {
-            Log.e("erdemii", "Error: ${e.message}")
-        }
-    }
+    return response
+        .candidates
+        .first()
+        .content
+        .parts
+        .first()
+        .text
 
 }
-
 
 @Composable
 fun TranslationScaffol() {
     var presses by remember { mutableIntStateOf(0) }
 
     //modelCall()
-    sendRequest()
+    //sendRequest()
+    LaunchedEffect(Unit) {
+        try {
+            Log.e("GEMINI", "Basladi")
+            val result = ApiRequest()
+            Log.e("GEMINI", result)
+        } catch (e: Exception) {
+            Log.e("GEMINI", "Error: ${e.message}")
+        }
+    }
     Scaffold(
         topBar = {
             TopBar(

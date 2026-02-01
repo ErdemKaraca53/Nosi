@@ -1,18 +1,21 @@
 package com.erdem.nosi.request
 
-import GeminiResponse
 import com.erdem.nosi.data.GeminiRequest
+import com.erdem.nosi.data.GeminiResponse
 import retrofit2.http.Body
 import retrofit2.http.POST
+import retrofit2.http.Path
 import retrofit2.http.Query
-import retrofit2.http.Url
+
 
 interface ApiInterface {
 
-    @POST
+    //@Body ile payload otomatik olarak jsona çevirilir
+    @POST("models/{model}:generateContent")
     suspend fun generateContent(
-        @Url url: String,
-        @Body request: GeminiRequest,
-        @Query("key") apiKey: String
+        @Path("model") model: String,
+        @Query("key") apiKey: String,
+        @Body request: GeminiRequest
     ): GeminiResponse
+
 }
