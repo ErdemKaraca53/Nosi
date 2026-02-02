@@ -14,7 +14,6 @@ interface ApiInterface {
     @POST("models/{model}:generateContent")
     suspend fun generateContent(
         @Path("model") model: String,
-        @Query("key") apiKey: String,
         @Body request: GeminiRequest
     ): GeminiResponse
 
