@@ -12,6 +12,7 @@ object RetrofitInstance {
         "https://generativelanguage.googleapis.com/v1beta/"
 
     val client = OkHttpClient.Builder()
+        .addInterceptor(ApiKeyInterceptor())
         .connectTimeout(10, TimeUnit.SECONDS)
         .writeTimeout(10, TimeUnit.SECONDS)
         .readTimeout(10, TimeUnit.SECONDS)

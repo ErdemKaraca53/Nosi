@@ -114,7 +114,6 @@ suspend fun ApiRequest(): String {
     Log.e("GEMINI", "API Key: $key")
     val response = apiService.generateContent(
         model = "gemini-2.5-flash",
-        apiKey = "",
         request = request
     )
 
