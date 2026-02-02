@@ -1,3 +1,4 @@
+import com.android.build.gradle.internal.cxx.configure.gradleLocalProperties
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -5,7 +6,7 @@ plugins {
     alias(libs.plugins.google.gms.google.services)
     kotlin("plugin.serialization") version "2.0.0"
 }
-
+val key: String = gradleLocalProperties(rootDir, providers).getProperty("apikey")
 android {
     namespace = "com.erdem.nosi"
     compileSdk = 36
@@ -28,6 +29,10 @@ android {
                 "proguard-rules.pro"
             )
         }
+
+        getByName("debug") {
+            buildConfigField("String", "key", "\"$key\"")
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -38,6 +43,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

@@ -43,7 +43,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.erdem.nosi.R
 import com.erdem.nosi.data.Content
 import com.erdem.nosi.data.GeminiRequest
@@ -57,12 +56,7 @@ import com.erdem.nosi.ui.theme.TranslationContainerBackground
 import com.erdem.nosi.ui.theme.UnSelectedTransleteContainer
 import com.erdem.nosi.ui.theme.UnSelectedTransleteText
 import com.erdem.nosi.ui.theme.White
-import com.google.firebase.Firebase
-import com.google.firebase.ai.ai
-import com.google.firebase.ai.type.GenerativeBackend
-import com.google.firebase.ai.type.Schema
-import com.google.firebase.ai.type.generationConfig
-
+import com.erdem.nosi.BuildConfig
 val LexendFontFamily = FontFamily(
     Font(R.font.lexend)
 )
@@ -116,7 +110,8 @@ suspend fun ApiRequest(): String {
             )
         )
     )
-
+    val key = BuildConfig.key
+    Log.e("GEMINI", "API Key: $key")
     val response = apiService.generateContent(
         model = "gemini-2.5-flash",
         apiKey = "",
