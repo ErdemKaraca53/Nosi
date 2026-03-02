@@ -35,6 +35,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
@@ -71,7 +72,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.erdem.nosi.R
+import com.erdem.nosi.data.TranslationData
 import com.erdem.nosi.request.GeminiViewModel
+import com.erdem.nosi.request.UiState
 import com.erdem.nosi.ui.theme.AiTutorTextColor
 import com.erdem.nosi.ui.theme.CardBackgroundDark
 import com.erdem.nosi.ui.theme.CardBackgroundMedium
@@ -130,11 +133,7 @@ fun GradientDivider(modifier: Modifier = Modifier) {
 fun TranslationScaffol() {
 
     val viewModel: GeminiViewModel = viewModel()
-    val state by viewModel.newState.collectAsState()
-
-    // Ekran durumu: input mu, sonuç mı
-    var isInputMode by remember { mutableStateOf(true) }
-    var submittedSentence by remember { mutableStateOf("") }
+    val uiState by viewModel.uiState.collectAsState()
 
     Scaffold(
         topBar = {
@@ -147,7 +146,7 @@ fun TranslationScaffol() {
         bottomBar = {},
     ) { innerPadding ->
         AnimatedContent(
-            targetState = isInputMode,
+            targetState = uiState,
             transitionSpec = {
                 (fadeIn(tween(400)) + slideInVertically(tween(400)) { it / 4 })
                     .togetherWith(
@@ -155,35 +154,129 @@ fun TranslationScaffol() {
                     )
             },
             label = "screenTransition"
-        ) { showInput ->
-            if (showInput) {
-                // ── Input Ekranı ──
-                SentenceInputScreen(
-                    modifier = Modifier
-                        .padding(innerPadding)
-                        .background(color = CardBackgroundDark)
-                        .fillMaxSize(),
-                    onSubmit = { sentence ->
-                        submittedSentence = sentence
-                        viewModel.fetchResponse(sentence)
-                        Log.e("GEMINI", state.toString())
-                        isInputMode = false
+        ) { currentState ->
+            when (currentState) {
+                is UiState.Idle -> {
+                    // ── Input Ekranı ──
+                    SentenceInputScreen(
+                        modifier = Modifier
+                            .padding(innerPadding)
+                            .background(color = CardBackgroundDark)
+                            .fillMaxSize(),
+                        onSubmit = { sentence ->
+                            viewModel.fetchResponse(sentence)
+                        }
+                    )
+                }
+
+                is UiState.Loading -> {
+                    // ── Yükleniyor ──
+                    Box(
+                        modifier = Modifier
+                            .padding(innerPadding)
+                            .background(color = CardBackgroundDark)
+                            .fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(48.dp),
+                                color = GradientTealStart,
+                                trackColor = CardBorderColor.copy(alpha = 0.3f)
+                            )
+                            Spacer(modifier = Modifier.height(20.dp))
+                            Text(
+                                text = "Analyzing...",
+                                color = SectionHeaderColor,
+                                fontSize = 16.sp,
+                                fontFamily = LexendFontFamily,
+                                fontWeight = FontWeight.Normal
+                            )
+                        }
                     }
-                )
-            } else {
-                // ── Sonuç Ekranı ──
-                Column(
-                    modifier = Modifier
-                        .padding(innerPadding)
-                        .background(color = CardBackgroundDark)
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(20.dp),
-                ) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    AiInfo()
-                    TransletedSentence()
-                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
+                is UiState.Success -> {
+                    // ── Sonuç Ekranı ──
+                    val translationData = currentState.translationData
+                    Column(
+                        modifier = Modifier
+                            .padding(innerPadding)
+                            .background(color = CardBackgroundDark)
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(20.dp),
+                    ) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        AiInfo()
+                        TransletedSentence(translationData = translationData)
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
+
+                is UiState.Error -> {
+                    // ── Hata Ekranı ──
+                    Box(
+                        modifier = Modifier
+                            .padding(innerPadding)
+                            .background(color = CardBackgroundDark)
+                            .fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                            modifier = Modifier.padding(horizontal = 32.dp)
+                        ) {
+                            Text(
+                                text = "⚠",
+                                fontSize = 48.sp
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = "Something went wrong",
+                                color = White,
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                fontFamily = LexendFontFamily
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = currentState.message,
+                                color = SectionHeaderColor,
+                                fontSize = 14.sp,
+                                fontFamily = LexendFontFamily,
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(24.dp))
+                            // Tekrar dene butonu
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(
+                                        Brush.linearGradient(
+                                            colors = listOf(GradientTealStart, GradientTealEnd)
+                                        )
+                                    )
+                                    .clickable {
+                                        viewModel.resetToIdle()
+                                    }
+                                    .padding(horizontal = 32.dp, vertical = 14.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Try Again",
+                                    color = White,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontFamily = LexendFontFamily
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -509,7 +602,7 @@ fun AiInfo() {
 // Alternative Sentence Card (Glassmorphism)
 // ──────────────────────────────────────
 @Composable
-fun TextSurface(color: Color, textColor: Color, text: String, isSelected: Boolean = false) {
+fun TextSurface(color: Color, textColor: Color, text: String, isSelected: Boolean = false, onClick: () -> Unit = {}) {
     val borderBrush = if (isSelected) {
         Brush.linearGradient(
             colors = listOf(GradientGoldStart, GradientGoldEnd)
@@ -547,7 +640,8 @@ fun TextSurface(color: Color, textColor: Color, text: String, isSelected: Boolea
                 width = 1.dp,
                 brush = borderBrush,
                 shape = RoundedCornerShape(14.dp)
-            ),
+            )
+            .clickable { onClick() },
         color = bgColor,
         shape = RoundedCornerShape(14.dp)
     ) {
@@ -570,7 +664,7 @@ fun TextSurface(color: Color, textColor: Color, text: String, isSelected: Boolea
                 Spacer(modifier = Modifier.width(12.dp))
             }
             Text(
-                text = "Which color do you like most",
+                text = text,
                 color = animTextColor,
                 fontSize = 16.sp,
                 textAlign = TextAlign.Start,
@@ -585,7 +679,18 @@ fun TextSurface(color: Color, textColor: Color, text: String, isSelected: Boolea
 // Translated Sentence – Main Card
 // ──────────────────────────────────────
 @Composable
-fun TransletedSentence() {
+fun TransletedSentence(translationData: TranslationData) {
+
+    // Seçili alternatif cümle index'i
+    var selectedTranslationIndex by remember { mutableIntStateOf(0) }
+    // Seçili kelime index'i
+    var selectedWordIndex by remember { mutableIntStateOf(0) }
+
+    val translations = translationData.translations
+    val selectedTranslation = translations.getOrNull(selectedTranslationIndex)
+    val firstSentence = translations.firstOrNull()?.translatedSentence ?: ""
+    val words = selectedTranslation?.words ?: emptyList()
+    val wordTexts = words.map { it.word }
 
     Surface(
         modifier = Modifier
@@ -620,7 +725,7 @@ fun TransletedSentence() {
 
             Text(
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-                text = "What is your favorite color",
+                text = firstSentence,
                 color = White,
                 fontSize = 20.sp,
                 textAlign = TextAlign.Start,
@@ -634,65 +739,70 @@ fun TransletedSentence() {
             )
 
             // ── Section: Alternative Sentences ──
-            Text(
-                modifier = Modifier.padding(start = 20.dp, top = 8.dp, end = 20.dp, bottom = 8.dp),
-                text = "✧  Alternative English Sentences",
-                color = SectionHeaderColor,
-                fontSize = 13.sp,
-                textAlign = TextAlign.Start,
-                fontWeight = FontWeight.SemiBold,
-                fontFamily = LexendFontFamily,
-                letterSpacing = 1.sp
-            )
+            if (translations.size > 1) {
+                Text(
+                    modifier = Modifier.padding(start = 20.dp, top = 8.dp, end = 20.dp, bottom = 8.dp),
+                    text = "✧  Alternative English Sentences",
+                    color = SectionHeaderColor,
+                    fontSize = 13.sp,
+                    textAlign = TextAlign.Start,
+                    fontWeight = FontWeight.SemiBold,
+                    fontFamily = LexendFontFamily,
+                    letterSpacing = 1.sp
+                )
 
-            // Api'den gelen yanıt yazdırılacak
-            TextSurface(
-                color = SelectedTransleteContainer,
-                textColor = SelectedTransleteText,
-                text = "",
-                isSelected = true
-            )
-            TextSurface(
-                color = UnSelectedTransleteContainer,
-                textColor = UnSelectedTransleteText,
-                text = "",
-                isSelected = false
-            )
+                // API'den gelen tüm çeviri alternatiflerini göster
+                translations.forEachIndexed { index, translation ->
+                    TextSurface(
+                        color = if (index == selectedTranslationIndex) SelectedTransleteContainer else UnSelectedTransleteContainer,
+                        textColor = if (index == selectedTranslationIndex) SelectedTransleteText else UnSelectedTransleteText,
+                        text = translation.translatedSentence,
+                        isSelected = index == selectedTranslationIndex,
+                        onClick = {
+                            selectedTranslationIndex = index
+                            selectedWordIndex = 0
+                        }
+                    )
+                }
 
-            GradientDivider(
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
-            )
+                GradientDivider(
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
+                )
+            }
 
             // ── Section: Word Breakdown ──
-            Text(
-                modifier = Modifier.padding(horizontal = 20.dp),
-                text = "✦  Breakdown for \"Which color do you like the most?\"",
-                color = SectionHeaderColor,
-                fontSize = 13.sp,
-                textAlign = TextAlign.Start,
-                fontWeight = FontWeight.SemiBold,
-                fontFamily = LexendFontFamily,
-                letterSpacing = 0.5.sp
-            )
+            if (wordTexts.isNotEmpty()) {
+                Text(
+                    modifier = Modifier.padding(horizontal = 20.dp),
+                    text = "✦  Breakdown for \"${selectedTranslation?.translatedSentence ?: ""}\"",
+                    color = SectionHeaderColor,
+                    fontSize = 13.sp,
+                    textAlign = TextAlign.Start,
+                    fontWeight = FontWeight.SemiBold,
+                    fontFamily = LexendFontFamily,
+                    letterSpacing = 0.5.sp
+                )
 
-            val words = listOf("Which", "color", "do", "you", "like", "most")
-            var selectedIndex by remember { mutableIntStateOf(0) }
-            FlowRowSimpleUsageExample(
-                list = words,
-                selectedIndex = selectedIndex,
-                onSelectedIndexChange = { selectedIndex = it }
-            )
+                FlowRowSimpleUsageExample(
+                    list = wordTexts,
+                    selectedIndex = selectedWordIndex,
+                    onSelectedIndexChange = { selectedWordIndex = it }
+                )
 
-            GradientDivider(
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
-            )
+                GradientDivider(
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
+                )
 
-            // ── Section: Word Detail ──
-            WordExplanation(
-                word = words.getOrElse(selectedIndex) { "" },
-                wordInformation = "",
-                wordExplanation = ""
-            )
+                // ── Section: Word Detail ──
+                val selectedWord = words.getOrNull(selectedWordIndex)
+                if (selectedWord != null) {
+                    WordExplanation(
+                        word = selectedWord.word,
+                        wordInformation = selectedWord.pos,
+                        wordExplanation = selectedWord.meaningTr
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(8.dp))
         }
@@ -862,36 +972,39 @@ fun WordExplanation(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Pronunciation & type with badge style
-            Surface(
-                modifier = Modifier.wrapContentSize(),
-                color = CardBackgroundDark.copy(alpha = 0.6f),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Text(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    text = "🔊  /wɪtʃ/  ·  Determiner, Pronoun",
-                    color = SubtleTextColor,
-                    fontSize = 14.sp,
-                    fontFamily = LexendFontFamily,
-                    fontWeight = FontWeight.Normal,
-                    letterSpacing = 0.3.sp
-                )
+            // Part of speech badge
+            if (wordInformation.isNotBlank()) {
+                Surface(
+                    modifier = Modifier.wrapContentSize(),
+                    color = CardBackgroundDark.copy(alpha = 0.6f),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        text = "📝  $wordInformation",
+                        color = SubtleTextColor,
+                        fontSize = 14.sp,
+                        fontFamily = LexendFontFamily,
+                        fontWeight = FontWeight.Normal,
+                        letterSpacing = 0.3.sp
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Definition
-            Text(
-                text = "Asking for information specifying one or" +
-                        " more people or things from a definite set.",
-                color = Color(0xFFD1D5DB),
-                fontSize = 16.sp,
-                fontFamily = LexendFontFamily,
-                fontWeight = FontWeight.Normal,
-                textAlign = TextAlign.Start,
-                lineHeight = 24.sp
-            )
+            // Turkish meaning
+            if (wordExplanation.isNotBlank()) {
+                Text(
+                    text = wordExplanation,
+                    color = Color(0xFFD1D5DB),
+                    fontSize = 16.sp,
+                    fontFamily = LexendFontFamily,
+                    fontWeight = FontWeight.Normal,
+                    textAlign = TextAlign.Start,
+                    lineHeight = 24.sp
+                )
+            }
         }
     }
 }

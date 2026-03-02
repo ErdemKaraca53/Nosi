@@ -1,45 +1,43 @@
 package com.erdem.nosi.request
 
-import android.util.Log
-import com.erdem.nosi.BuildConfig
-import com.erdem.nosi.data.Content
-import com.erdem.nosi.data.GeminiRequest
-import com.erdem.nosi.data.Part
-
-class GeminiApiService() {
+/**
+ * Gemini API için prompt oluşturma servisi.
+ * Object (singleton) olarak tanımlandı — her çağrıda yeni instance oluşturmaya gerek yok.
+ */
+object GeminiApiService {
 
     fun CreatePrompt(inputSentence: String): String {
-        val safeInput = inputSentence.replace("\"", "\\\"")
+        val safeInput = inputSentence
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\n", " ")
+            .trim()
 
         return """
-        
         Sana bir türkçe cümle vereceğim. Bu cümleyi ingilizceye çevir. İngilizce karşılığı olan
-        cümlenin her kelimesini aşağıdaki json formatına uygun şekilde response olarak döndür
+        cümlenin her kelimesini aşağıdaki json formatına uygun şekilde response olarak döndür.
+        Sadece JSON döndür, başka bir şey yazma.
 
         JSON Schema:
         {
           "sourceLanguage": "tr",
           "targetLanguage": "en",
-          {
-            "translations": [
-              {
-                "translatedSentence": "string",
-                "words": [
-                  {
-                    "word": "string",
-                    "pos": "string",
-                    "meaningTr": "string"
-                  }
-                ]
-              }
-            ]
-          }
+          "translations": [
+            {
+              "translatedSentence": "string",
+              "words": [
+                {
+                  "word": "string",
+                  "pos": "string",
+                  "meaningTr": "string"
+                }
+              ]
+            }
+          ]
         }
-
 
         Input sentence (Turkish):
         "$safeInput"
-    """.trimIndent()
+        """.trimIndent()
     }
-
 }
