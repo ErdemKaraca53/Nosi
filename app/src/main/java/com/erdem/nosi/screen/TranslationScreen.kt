@@ -74,6 +74,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.erdem.nosi.R
 import com.erdem.nosi.data.TranslationData
 import com.erdem.nosi.request.GeminiViewModel
+import com.erdem.nosi.request.SaveState
 import com.erdem.nosi.request.UiState
 import com.erdem.nosi.ui.theme.AiTutorTextColor
 import com.erdem.nosi.ui.theme.CardBackgroundDark
@@ -130,17 +131,19 @@ fun GradientDivider(modifier: Modifier = Modifier) {
 // Main Scaffold
 // ──────────────────────────────────────
 @Composable
-fun TranslationScaffol() {
+fun TranslationScaffol(onNavigateBack: () -> Unit = {}) {
 
     val viewModel: GeminiViewModel = viewModel()
     val uiState by viewModel.uiState.collectAsState()
 
     Scaffold(
         topBar = {
-            TopBar(
-                "Word & Sentence Analysis",
-                R.drawable.ayarlar_simge,
-                "Translation Top Icon"
+            TopBarWithBack(
+                text = "Word & Sentence Analysis",
+                onBack = {
+                    viewModel.resetToIdle()
+                    onNavigateBack()
+                }
             )
         },
         bottomBar = {},
@@ -202,6 +205,7 @@ fun TranslationScaffol() {
                 is UiState.Success -> {
                     // ── Sonuç Ekranı ──
                     val translationData = currentState.translationData
+                    val saveState by viewModel.saveState.collectAsState()
                     Column(
                         modifier = Modifier
                             .padding(innerPadding)
@@ -211,8 +215,14 @@ fun TranslationScaffol() {
                         verticalArrangement = Arrangement.spacedBy(20.dp),
                     ) {
                         Spacer(modifier = Modifier.height(4.dp))
-                        AiInfo()
                         TransletedSentence(translationData = translationData)
+
+                        // ── Save Button ──
+                        SaveTranslationButton(
+                            saveState = saveState,
+                            onSave = { viewModel.saveTranslation() }
+                        )
+
                         Spacer(modifier = Modifier.height(8.dp))
                     }
                 }
@@ -797,7 +807,7 @@ fun TransletedSentence(translationData: TranslationData) {
                 val selectedWord = words.getOrNull(selectedWordIndex)
                 if (selectedWord != null) {
                     WordExplanation(
-                        word = selectedWord.word,
+                        word = selectedWord.lemma.ifBlank { selectedWord.word },
                         wordInformation = selectedWord.pos,
                         wordExplanation = selectedWord.meaningTr
                     )
@@ -1009,8 +1019,110 @@ fun WordExplanation(
     }
 }
 
+// ──────────────────────────────────────
+// Save Translation Button
+// ──────────────────────────────────────
+@Composable
+fun SaveTranslationButton(saveState: SaveState, onSave: () -> Unit) {
+    val isSaved = saveState is SaveState.Saved
+    val isSaving = saveState is SaveState.Saving
+
+    Box(
+        modifier = Modifier
+            .padding(horizontal = 16.dp)
+            .fillMaxWidth()
+            .height(52.dp)
+            .shadow(
+                elevation = if (!isSaved) 8.dp else 0.dp,
+                shape = RoundedCornerShape(14.dp),
+                ambientColor = if (isSaved) Color.Transparent else GlowTeal,
+                spotColor = if (isSaved) Color.Transparent else GlowTeal
+            )
+            .clip(RoundedCornerShape(14.dp))
+            .background(
+                when {
+                    isSaved -> Brush.linearGradient(
+                        colors = listOf(Color(0xFF059669), Color(0xFF10B981))
+                    )
+                    else -> Brush.linearGradient(
+                        colors = listOf(GradientTealStart, GradientTealEnd)
+                    )
+                }
+            )
+            .clickable(
+                enabled = !isSaved && !isSaving,
+                onClick = onSave
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        when {
+            isSaving -> {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        color = White,
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = "Saving...",
+                        color = White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = LexendFontFamily
+                    )
+                }
+            }
+            isSaved -> {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = "✓",
+                        color = White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Saved",
+                        color = White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = LexendFontFamily
+                    )
+                }
+            }
+            else -> {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = "Save Translation",
+                        color = White,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = LexendFontFamily,
+                        letterSpacing = 0.5.sp
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "💾",
+                        fontSize = 18.sp
+                    )
+                }
+            }
+        }
+    }
+}
+
 @Preview(showBackground = true)
 @Composable
 fun TranslationPreview() {
-    TranslationScaffol()
+    TranslationScaffol(onNavigateBack = {})
 }

@@ -18,6 +18,10 @@ object GeminiApiService {
         cümlenin her kelimesini aşağıdaki json formatına uygun şekilde response olarak döndür.
         Sadece JSON döndür, başka bir şey yazma.
 
+        ÖNEMLİ:
+        - "word" alanına kelimenin cümlede geçtiği orijinal halini yaz (örn: "leashed", "went", "running").
+        - "lemma" alanına kelimenin sözlük/kök halini yaz (örn: "leash", "go", "run").
+
         JSON Schema:
         {
           "sourceLanguage": "tr",
@@ -27,7 +31,8 @@ object GeminiApiService {
               "translatedSentence": "string",
               "words": [
                 {
-                  "word": "string",
+                  "word": "string (cümlede geçen orijinal hali)",
+                  "lemma": "string (kök/sözlük hali)",
                   "pos": "string",
                   "meaningTr": "string"
                 }
