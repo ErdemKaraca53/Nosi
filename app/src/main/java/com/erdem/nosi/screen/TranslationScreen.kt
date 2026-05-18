@@ -92,7 +92,8 @@ import com.erdem.nosi.ui.theme.WordDetailBg
 import kotlinx.coroutines.delay
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.erdem.nosi.Network.DictionaryViewModel
+import com.erdem.nosi.ViewModels.AutoCompleteViewModel
+import com.erdem.nosi.ViewModels.DictionaryViewModel
 
 val LexendFontFamily = FontFamily(
     Font(R.font.lexend)
@@ -131,7 +132,7 @@ fun TranslationScaffol(onNavigateBack: () -> Unit = {}) {
     var saveState by remember { mutableStateOf("IDLE") }
     val hasInput = inputText.isNotBlank()
 
-    val viewModel = viewModel<DictionaryViewModel>()
+    val viewModel = viewModel<AutoCompleteViewModel>()
 
     //Log.e("Deneme", result)
 

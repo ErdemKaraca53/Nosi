@@ -1,0 +1,9 @@
+package com.erdem.nosi.data
+
+import kotlinx.serialization.Serializable
+
+@Serializable
+data class Response(
+    val word: String,
+    val score: Int
+)

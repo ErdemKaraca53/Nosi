@@ -1,10 +1,10 @@
-package com.erdem.nosi.Network
+package com.erdem.nosi.ViewModels
 
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.erdem.nosi.Network.DictionaryApi
 import kotlinx.coroutines.launch
-
 
 class DictionaryViewModel: ViewModel() {
 

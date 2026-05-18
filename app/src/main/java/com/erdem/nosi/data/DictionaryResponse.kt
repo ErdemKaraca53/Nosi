@@ -4,7 +4,7 @@ import kotlinx.serialization.Serializable
 
 
 @Serializable
-data class ApiResponse(
+data class DictionaryApiResponse(
     val meanings: List<Meaning>,
 )
 

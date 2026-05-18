@@ -61,7 +61,6 @@ dependencies {
     implementation("androidx.compose.ui:ui-text-google-fonts:1.9.4")
     val nav_version = "2.9.6"
     implementation("androidx.navigation:navigation-compose:${nav_version}")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
     implementation("com.google.mlkit:genai-prompt:1.0.0-beta2")
     implementation("com.google.mlkit:translate:17.0.3")
     // Retrofit
@@ -70,5 +69,6 @@ dependencies {
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
     // Kotlinx Serialization için resmi dönüştürücü:
     implementation("com.squareup.retrofit2:converter-kotlinx-serialization:2.11.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+    // JSON Kütüphanesi (Kotlin 2.0.0 ile uyumlu olan sürüm)
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.1")
 }
