@@ -1,20 +1,17 @@
-import com.android.build.gradle.internal.cxx.configure.gradleLocalProperties
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.google.gms.google.services)
-    alias(libs.plugins.ksp)
     kotlin("plugin.serialization") version "2.0.0"
 }
-val key: String = gradleLocalProperties(rootDir, providers).getProperty("apikey")
 android {
     namespace = "com.erdem.nosi"
     compileSdk = 36
 
     defaultConfig {
         applicationId = "com.erdem.nosi"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
@@ -30,10 +27,6 @@ android {
                 "proguard-rules.pro"
             )
         }
-
-        getByName("debug") {
-            buildConfigField("String", "key", "\"$key\"")
-        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -44,7 +37,6 @@ android {
     }
     buildFeatures {
         compose = true
-        buildConfig = true
     }
 }
 
@@ -70,13 +62,13 @@ dependencies {
     val nav_version = "2.9.6"
     implementation("androidx.navigation:navigation-compose:${nav_version}")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
-    // retrofit
-    implementation("com.squareup.retrofit2:retrofit:2.9.0")
-    // gson converter
-    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
-    implementation("com.squareup.okhttp3:logging-interceptor:4.10.0")
-    // room
-    implementation(libs.room.runtime)
-    implementation(libs.room.ktx)
-    ksp(libs.room.compiler)
+    implementation("com.google.mlkit:genai-prompt:1.0.0-beta2")
+    implementation("com.google.mlkit:translate:17.0.3")
+    // Retrofit
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.6")
+
+    implementation("com.squareup.retrofit2:retrofit:2.11.0")
+    // Kotlinx Serialization için resmi dönüştürücü:
+    implementation("com.squareup.retrofit2:converter-kotlinx-serialization:2.11.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
 }

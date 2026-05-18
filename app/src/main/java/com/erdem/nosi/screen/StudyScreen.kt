@@ -46,11 +46,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.erdem.nosi.data.local.NosiDatabase
-import com.erdem.nosi.data.local.SavedWordEntity
+import androidx.compose.ui.tooling.preview.Preview
+import com.erdem.nosi.ui.theme.NosiTheme
+import com.erdem.nosi.model.SavedWordEntity
+import com.erdem.nosi.model.MockData
 import com.erdem.nosi.ui.theme.CardBackgroundDark
 import com.erdem.nosi.ui.theme.CardBackgroundMedium
 import com.erdem.nosi.ui.theme.CardBorderColor
@@ -64,33 +63,7 @@ import kotlinx.coroutines.launch
 import kotlin.math.absoluteValue
 import kotlin.math.roundToInt
 
-// ──────────────────────────────────────
-// Study ViewModel
-// ──────────────────────────────────────
-class StudyViewModel(application: Application) : AndroidViewModel(application) {
-    private val dao = NosiDatabase.getInstance(application).translationDao()
-
-    val words = mutableStateListOf<SavedWordEntity>()
-    var collectionName by mutableStateOf("Study")
-        private set
-    var isLoading by mutableStateOf(true)
-        private set
-
-    fun loadWords(collectionId: Long) {
-        viewModelScope.launch {
-            isLoading = true
-            collectionName = dao.getCollectionName(collectionId) ?: "Study"
-            val translations = dao.getTranslationsForCollectionOnce(collectionId)
-            val allWords = mutableListOf<SavedWordEntity>()
-            translations.forEach { translation ->
-                allWords.addAll(dao.getWordsForTranslation(translation.id))
-            }
-            words.clear()
-            words.addAll(allWords)
-            isLoading = false
-        }
-    }
-}
+// View model deleted
 
 // ──────────────────────────────────────
 // Study Screen
@@ -100,17 +73,14 @@ fun StudyScreen(
     collectionId: Long,
     onNavigateBack: () -> Unit = {}
 ) {
-    val viewModel: StudyViewModel = viewModel()
     var currentIndex by remember { mutableIntStateOf(0) }
-
-    LaunchedEffect(collectionId) {
-        viewModel.loadWords(collectionId)
-    }
+    val words = remember { MockData.sampleWordsFor101 }
+    val collectionName = remember { MockData.sampleCollections.find { it.id == collectionId }?.name ?: "Study" }
 
     Scaffold(
         topBar = {
             TopBarWithBack(
-                text = "Study — ${viewModel.collectionName}",
+                text = "Study — $collectionName",
                 onBack = onNavigateBack
             )
         }
@@ -123,20 +93,7 @@ fun StudyScreen(
             contentAlignment = Alignment.Center
         ) {
             when {
-                viewModel.isLoading -> {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(text = "🃏", fontSize = 48.sp)
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = "Loading cards...",
-                            color = SubtleTextColor,
-                            fontSize = 16.sp,
-                            fontFamily = LexendFontFamily
-                        )
-                    }
-                }
-
-                viewModel.words.isEmpty() -> {
+                words.isEmpty() -> {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(text = "📭", fontSize = 48.sp)
                         Spacer(modifier = Modifier.height(16.dp))
@@ -149,7 +106,7 @@ fun StudyScreen(
                     }
                 }
 
-                currentIndex >= viewModel.words.size -> {
+                currentIndex >= words.size -> {
                     // Tamamlandı
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -166,7 +123,7 @@ fun StudyScreen(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "You've reviewed all ${viewModel.words.size} words",
+                            text = "You've reviewed all ${words.size} words",
                             color = SubtleTextColor,
                             fontSize = 16.sp,
                             fontFamily = LexendFontFamily,
@@ -203,7 +160,7 @@ fun StudyScreen(
                         // Progress
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = "${currentIndex + 1} / ${viewModel.words.size}",
+                            text = "${currentIndex + 1} / ${words.size}",
                             color = SubtleTextColor,
                             fontSize = 14.sp,
                             fontFamily = LexendFontFamily,
@@ -225,12 +182,12 @@ fun StudyScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             // Deste efekti — alttaki kartlar hafif açılı ve kaymış
-                            val remaining = viewModel.words.size - currentIndex
+                            val remaining = words.size - currentIndex
 
                             // 3. kart (en altta)
                             if (remaining > 3) {
                                 FlashCard(
-                                    word = viewModel.words[currentIndex + 3],
+                                    word = words[currentIndex + 3],
                                     modifier = Modifier
                                         .graphicsLayer {
                                             rotationZ = 5f
@@ -244,7 +201,7 @@ fun StudyScreen(
                             // 2. kart — sürükleme ilerledikçe hafifçe düzeliyor
                             if (remaining > 2) {
                                 FlashCard(
-                                    word = viewModel.words[currentIndex + 2],
+                                    word = words[currentIndex + 2],
                                     modifier = Modifier
                                         .graphicsLayer {
                                             rotationZ = -3f + (dragProgress * 1f)
@@ -258,7 +215,7 @@ fun StudyScreen(
                             // 1. kart — sürükleme ilerledikçe ön plana geçiyor
                             if (remaining > 1) {
                                 FlashCard(
-                                    word = viewModel.words[currentIndex + 1],
+                                    word = words[currentIndex + 1],
                                     modifier = Modifier
                                         .graphicsLayer {
                                             rotationZ = 2f * (1f - dragProgress)
@@ -317,7 +274,7 @@ fun StudyScreen(
                                         )
                                     }
                             ) {
-                                FlashCard(word = viewModel.words[currentIndex])
+                                FlashCard(word = words[currentIndex])
                             }
                         }
 
@@ -582,5 +539,13 @@ private fun FlashCard(
                 )
             }
         }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun StudyScreenPreview() {
+    NosiTheme {
+        StudyScreen(collectionId = 1L)
     }
 }

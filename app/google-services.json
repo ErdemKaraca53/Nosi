@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "662657509892",
-    "project_id": "nosi-68cfa",
-    "storage_bucket": "nosi-68cfa.firebasestorage.app"
+    "project_number": "786081588003",
+    "project_id": "nosi-d72e1",
+    "storage_bucket": "nosi-d72e1.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:662657509892:android:dfe508a0b1a098e90d6351",
+        "mobilesdk_app_id": "1:786081588003:android:babfdb5d0f5dfd2235e296",
         "android_client_info": {
           "package_name": "com.erdem.nosi"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyBMzgO7Or027Fd6LkFatlEk3gizs15SV7E"
+          "current_key": "AIzaSyAJpYYkXYH5NEqa5a27l4glqkAiKWkEkpQ"
         }
       ],
       "services": {

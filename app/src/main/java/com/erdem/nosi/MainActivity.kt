@@ -1,6 +1,9 @@
 package com.erdem.nosi
 
+import android.content.ContentValues.TAG
 import android.os.Bundle
+import android.util.Log
+import android.view.translation.Translator
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -18,11 +21,25 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.erdem.nosi.screen.CollectionDetailScreen
+import com.erdem.nosi.screen.DictionaryScreen
 import com.erdem.nosi.screen.MainScreenContent
 import com.erdem.nosi.screen.StudyScreen
 import com.erdem.nosi.screen.TranslationScaffol
 import com.erdem.nosi.ui.theme.CardBackgroundDark
 import com.erdem.nosi.ui.theme.NosiTheme
+import com.google.firebase.Firebase
+import com.google.firebase.ai.ai
+import com.google.firebase.ai.type.GenerativeBackend
+import com.google.mlkit.common.model.DownloadConditions
+import com.google.mlkit.genai.common.DownloadStatus
+import com.google.mlkit.genai.common.FeatureStatus
+import com.google.mlkit.genai.prompt.Generation
+import com.google.mlkit.nl.translate.TranslateLanguage
+import com.google.mlkit.nl.translate.Translation
+import com.google.mlkit.nl.translate.TranslatorOptions
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -33,6 +50,63 @@ class MainActivity : ComponentActivity() {
                 AppNavigation()
             }
         }
+
+
+
+
+        //-----
+        val options = TranslatorOptions.Builder()
+            .setSourceLanguage(TranslateLanguage.TURKISH)
+            .setTargetLanguage(TranslateLanguage.ENGLISH)
+            .build()
+
+        val englishTurkishTranslator = Translation.getClient(options)
+
+        var conditions = DownloadConditions.Builder()
+            .requireWifi()
+            .build()
+
+        englishTurkishTranslator.downloadModelIfNeeded(conditions)
+            .addOnSuccessListener {
+                Log.e("translation","Model downloaded successfully")
+            }
+            .addOnFailureListener { exception ->
+                Log.e("translation","Model download failed: $exception")
+            }
+
+        var text = "Ona aşık olduğum anı dün gibi hatırlıyorum"
+
+        englishTurkishTranslator.translate(text)
+            .addOnSuccessListener { translatedText ->
+                Log.e("translation","Translated text: $translatedText")
+            }
+            .addOnFailureListener { exception ->
+                Log.e("translation","Translation failed: $exception")
+            }
+        var modelDownloaded = false
+        fun testGemini() {
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+
+                    /*val model = Firebase.ai(
+                        backend = GenerativeBackend.googleAI()
+                    ).generativeModel("gemini-3-flash-preview")
+
+                    val prompt = "Dün gece aşık oldum. Bu cümleyi ingilizce diline çevir ve cümlede kullandığın kelimelerin" +
+                            " zaman ve çoğul eklerinden arındılmış halde anlamlarını ve türlerini ver. bunu bir json formatında ver" +
+                            ""
+
+                    val response = model.generateContent(prompt)
+
+                    Log.e("yapay","AI Response: ${response.text}")*/
+
+                } catch (e: Exception) {
+                    println("Error: ${e.message}")
+                }
+            }
+        }
+        testGemini()
+
     }
 }
 
@@ -74,6 +148,9 @@ fun AppNavigation() {
                 onNavigateToTranslation = {
                     navController.navigate("translation")
                 },
+                onNavigateToWordLookup = {
+                    navController.navigate("dictionary")
+                },
                 onNavigateToCollection = { collectionId ->
                     navController.navigate("collection/$collectionId")
                 }
@@ -81,6 +158,13 @@ fun AppNavigation() {
         }
         composable("translation") {
             TranslationScaffol(
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+        composable("dictionary") {
+            DictionaryScreen(
                 onNavigateBack = {
                     navController.popBackStack()
                 }

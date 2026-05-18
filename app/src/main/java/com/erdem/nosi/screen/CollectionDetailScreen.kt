@@ -45,44 +45,25 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.erdem.nosi.data.local.NosiDatabase
-import com.erdem.nosi.data.local.SavedTranslationEntity
-import com.erdem.nosi.data.local.SavedWordEntity
+import androidx.compose.ui.tooling.preview.Preview
+import com.erdem.nosi.ui.theme.NosiTheme
+import com.erdem.nosi.model.SavedTranslationEntity
+import com.erdem.nosi.model.SavedWordEntity
+import com.erdem.nosi.model.MockData
 import com.erdem.nosi.ui.theme.CardBackgroundDark
 import com.erdem.nosi.ui.theme.CardBackgroundMedium
 import com.erdem.nosi.ui.theme.CardBorderColor
 import com.erdem.nosi.ui.theme.ChipSelectedGradientEnd
 import com.erdem.nosi.ui.theme.ChipSelectedGradientStart
 import com.erdem.nosi.ui.theme.ChipUnselectedBg
-import com.erdem.nosi.ui.theme.GlowTeal
 import com.erdem.nosi.ui.theme.GradientTealEnd
 import com.erdem.nosi.ui.theme.GradientTealStart
 import com.erdem.nosi.ui.theme.SectionHeaderColor
 import com.erdem.nosi.ui.theme.SubtleTextColor
 import com.erdem.nosi.ui.theme.White
 import com.erdem.nosi.ui.theme.WordDetailBg
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.launch
 
-// ──────────────────────────────────────
-// Collection Detail ViewModel
-// ──────────────────────────────────────
-class CollectionDetailViewModel(application: Application) : AndroidViewModel(application) {
-    private val dao = NosiDatabase.getInstance(application).translationDao()
-
-    fun getTranslations(collectionId: Long): Flow<List<SavedTranslationEntity>> =
-        dao.getTranslationsForCollection(collectionId)
-
-    suspend fun getWords(translationId: Long): List<SavedWordEntity> =
-        dao.getWordsForTranslation(translationId)
-
-    suspend fun getCollectionName(collectionId: Long): String =
-        dao.getCollectionName(collectionId) ?: "Collection"
-}
-
+// Removed viewmodel
 // ──────────────────────────────────────
 // Collection Detail Screen
 // ──────────────────────────────────────
@@ -92,13 +73,8 @@ fun CollectionDetailScreen(
     onNavigateBack: () -> Unit = {},
     onNavigateToStudy: () -> Unit = {}
 ) {
-    val viewModel: CollectionDetailViewModel = viewModel()
-    val translations by viewModel.getTranslations(collectionId).collectAsState(initial = emptyList())
-    var collectionName by remember { mutableStateOf("Collection") }
-
-    LaunchedEffect(collectionId) {
-        collectionName = viewModel.getCollectionName(collectionId)
-    }
+    val translations = remember { MockData.sampleTranslations }
+    val collectionName by remember { mutableStateOf(MockData.sampleCollections.find { it.id == collectionId }?.name ?: "Collection") }
 
     Scaffold(
         topBar = {
@@ -158,8 +134,7 @@ fun CollectionDetailScreen(
                 // Translation cards
                 translations.forEach { translation ->
                     ExpandableTranslationCard(
-                        translation = translation,
-                        viewModel = viewModel
+                        translation = translation
                     )
                 }
 
@@ -216,8 +191,7 @@ private fun StudyButton(onClick: () -> Unit) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ExpandableTranslationCard(
-    translation: SavedTranslationEntity,
-    viewModel: CollectionDetailViewModel
+    translation: SavedTranslationEntity
 ) {
     var isExpanded by remember { mutableStateOf(false) }
     val words = remember { mutableStateListOf<SavedWordEntity>() }
@@ -226,7 +200,7 @@ private fun ExpandableTranslationCard(
     // Kelimeler sadece açıldığında yüklensin
     LaunchedEffect(isExpanded) {
         if (isExpanded && words.isEmpty()) {
-            words.addAll(viewModel.getWords(translation.id))
+            words.addAll(MockData.sampleWordsFor101)
         }
     }
 
@@ -448,5 +422,13 @@ private fun ExpandableTranslationCard(
                 }
             }
         }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun CollectionDetailScreenPreview() {
+    NosiTheme {
+        CollectionDetailScreen(collectionId = 1L)
     }
 }

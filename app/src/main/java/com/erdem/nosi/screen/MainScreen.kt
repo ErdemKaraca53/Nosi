@@ -31,6 +31,7 @@ import androidx.compose.material3.TopAppBarDefaults.topAppBarColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,14 +47,16 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.erdem.nosi.R
-import com.erdem.nosi.data.local.CollectionSummary
-import com.erdem.nosi.request.MainViewModel
+import com.erdem.nosi.model.CollectionSummary
+import com.erdem.nosi.model.MockData
 import com.erdem.nosi.ui.theme.CardBackgroundDark
 import com.erdem.nosi.ui.theme.CardBackgroundMedium
 import com.erdem.nosi.ui.theme.CardBorderColor
 import com.erdem.nosi.ui.theme.GlowTeal
+import com.erdem.nosi.ui.theme.GlowGold
+import com.erdem.nosi.ui.theme.GradientGoldEnd
+import com.erdem.nosi.ui.theme.GradientGoldStart
 import com.erdem.nosi.ui.theme.GradientTealEnd
 import com.erdem.nosi.ui.theme.GradientTealStart
 import com.erdem.nosi.ui.theme.NosiTheme
@@ -150,10 +153,10 @@ fun TopBarWithBack(text: String, onBack: () -> Unit) {
 @Composable
 fun MainScreenContent(
     onNavigateToTranslation: () -> Unit = {},
+    onNavigateToWordLookup: () -> Unit = {},
     onNavigateToCollection: (Long) -> Unit = {}
 ) {
-    val mainViewModel: MainViewModel = viewModel()
-    val collectionSummaries by mainViewModel.collectionSummaries.collectAsState(initial = emptyList())
+    val collectionSummaries = remember { MockData.sampleCollections }
 
     Scaffold(
         topBar = {
@@ -179,7 +182,12 @@ fun MainScreenContent(
                 onClick = onNavigateToTranslation
             )
 
-            // ── Section 2: My Collections ──
+            // ── Section 2: Word Lookup CTA ──
+            WordLookupCard(
+                onClick = onNavigateToWordLookup
+            )
+
+            // ── Section 3: My Collections ──
             SectionTitle(
                 icon = "📚",
                 title = "My Collections"
@@ -189,7 +197,7 @@ fun MainScreenContent(
                 onCollectionClick = onNavigateToCollection
             )
 
-            // ── Section 3: Community Collections ──
+            // ── Section 4: Community Collections ──
             SectionTitle(
                 icon = "🌍",
                 title = "Community Collections"
@@ -312,6 +320,109 @@ private fun NewTranslationCard(onClick: () -> Unit) {
                 Text(
                     text = "→",
                     color = GradientTealStart,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    }
+}
+
+// ──────────────────────────────────────
+// Word Lookup CTA Card
+// ──────────────────────────────────────
+@Composable
+private fun WordLookupCard(onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier
+            .padding(horizontal = 16.dp)
+            .fillMaxWidth()
+            .shadow(
+                elevation = 16.dp,
+                shape = RoundedCornerShape(20.dp),
+                ambientColor = GlowGold,
+                spotColor = GlowGold
+            )
+            .border(
+                width = 1.dp,
+                brush = Brush.linearGradient(
+                    colors = listOf(
+                        GradientGoldStart.copy(alpha = 0.6f),
+                        GradientGoldEnd.copy(alpha = 0.3f)
+                    )
+                ),
+                shape = RoundedCornerShape(20.dp)
+            )
+            .clickable { onClick() },
+        color = CardBackgroundMedium,
+        shape = RoundedCornerShape(20.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            GradientGoldStart.copy(alpha = 0.12f),
+                            Color.Transparent
+                        )
+                    )
+                )
+                .padding(24.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Icon circle
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .shadow(
+                            elevation = 8.dp,
+                            shape = CircleShape,
+                            ambientColor = GlowGold,
+                            spotColor = GlowGold
+                        )
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(GradientGoldStart, GradientGoldEnd)
+                            ),
+                            shape = CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "📖",
+                        fontSize = 24.sp,
+                        color = White
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(16.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Word Lookup",
+                        color = White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = LexendFontFamily,
+                        letterSpacing = 0.3.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Search and explore word definitions",
+                        color = SectionHeaderColor,
+                        fontSize = 14.sp,
+                        fontFamily = LexendFontFamily,
+                        fontWeight = FontWeight.Normal
+                    )
+                }
+
+                // Arrow
+                Text(
+                    text = "→",
+                    color = GradientGoldStart,
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold
                 )
