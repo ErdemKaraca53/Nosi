@@ -1,7 +1,6 @@
 package com.erdem.nosi.screen
 
 
-import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -62,7 +61,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.erdem.nosi.Network.DictionaryApi
 import com.erdem.nosi.R
 import com.erdem.nosi.model.MockData
 import com.erdem.nosi.model.TranslationData
@@ -90,10 +88,6 @@ import com.erdem.nosi.ui.theme.UnSelectedTransleteText
 import com.erdem.nosi.ui.theme.White
 import com.erdem.nosi.ui.theme.WordDetailBg
 import kotlinx.coroutines.delay
-import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.erdem.nosi.ViewModels.AutoCompleteViewModel
-import com.erdem.nosi.ViewModels.DictionaryViewModel
 
 val LexendFontFamily = FontFamily(
     Font(R.font.lexend)
@@ -132,9 +126,6 @@ fun TranslationScaffol(onNavigateBack: () -> Unit = {}) {
     var saveState by remember { mutableStateOf("IDLE") }
     val hasInput = inputText.isNotBlank()
 
-    val viewModel = viewModel<AutoCompleteViewModel>()
-
-    //Log.e("Deneme", result)
 
     // Mock: gerçek implementasyonda burada API/DB çağrısı olacak
     val translationData = if (hasInput) MockData.sampleTranslationData else null

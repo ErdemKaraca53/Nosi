@@ -1,6 +1,6 @@
 package com.erdem.nosi.Network
 
-import com.erdem.nosi.data.Response
+import com.erdem.nosi.data.AutoCompleteResponse
 import retrofit2.http.GET
 import retrofit2.http.Query
 
@@ -12,7 +12,7 @@ interface AutoCompleteApiService{
     @GET("sug")
     suspend fun GetSuggestions(
         @Query("s") word: String
-    ): List<Response>
+    ): List<AutoCompleteResponse>
 }
 
 object AutoCompleteApi {
