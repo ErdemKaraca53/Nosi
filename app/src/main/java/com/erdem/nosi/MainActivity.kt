@@ -1,16 +1,11 @@
 package com.erdem.nosi
 
-import android.content.ContentValues.TAG
 import android.os.Bundle
 import android.util.Log
-import android.view.translation.Translator
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.runtime.Composable
@@ -21,19 +16,14 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.erdem.nosi.screen.CollectionDetailScreen
-import com.erdem.nosi.screen.DictionaryScreen
+import com.erdem.nosi.screen.DictionaryInputScreen
+import com.erdem.nosi.screen.DictionaryResultScreen
 import com.erdem.nosi.screen.MainScreenContent
 import com.erdem.nosi.screen.StudyScreen
 import com.erdem.nosi.screen.TranslationScaffol
 import com.erdem.nosi.ui.theme.CardBackgroundDark
 import com.erdem.nosi.ui.theme.NosiTheme
-import com.google.firebase.Firebase
-import com.google.firebase.ai.ai
-import com.google.firebase.ai.type.GenerativeBackend
 import com.google.mlkit.common.model.DownloadConditions
-import com.google.mlkit.genai.common.DownloadStatus
-import com.google.mlkit.genai.common.FeatureStatus
-import com.google.mlkit.genai.prompt.Generation
 import com.google.mlkit.nl.translate.TranslateLanguage
 import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.TranslatorOptions
@@ -149,7 +139,7 @@ fun AppNavigation() {
                     navController.navigate("translation")
                 },
                 onNavigateToWordLookup = {
-                    navController.navigate("dictionary")
+                    navController.navigate("dictionary/input")
                 },
                 onNavigateToCollection = { collectionId ->
                     navController.navigate("collection/$collectionId")
@@ -163,8 +153,23 @@ fun AppNavigation() {
                 }
             )
         }
-        composable("dictionary") {
-            DictionaryScreen(
+        composable("dictionary/input") {
+            DictionaryInputScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                },
+                onNavigateToResult = { word ->
+                    navController.navigate("dictionary/result/$word")
+                }
+            )
+        }
+        composable(
+            route = "dictionary/result/{word}",
+            arguments = listOf(navArgument("word") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val word = backStackEntry.arguments?.getString("word") ?: ""
+            DictionaryResultScreen(
+                word = word,
                 onNavigateBack = {
                     navController.popBackStack()
                 }

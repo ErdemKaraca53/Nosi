@@ -64,6 +64,11 @@ class AutoCompleteViewModel : ViewModel() {
 sealed class AutoCompleteUiState {
 
     //Parametresiz durumlar için bellek ve performans
+    /*
+    Idle'ın İşlevi:
+    Idle durumu, kullanıcının bir eylem (örneğin metin girip arama butonuna basma)
+    yapmasını bekleyen pasif ekranlar için kullanılır.
+     */
     data object Idle : AutoCompleteUiState()
     data class Loading(
         val oldSuggestion : List<AutoCompleteResponse> = emptyList()
