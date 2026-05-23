@@ -1,6 +1,5 @@
 package com.erdem.nosi.screen
 
-import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -56,11 +55,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
-import androidx.compose.ui.tooling.preview.Preview
-import com.erdem.nosi.ui.theme.NosiTheme
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.erdem.nosi.ViewModels.AutoCompleteUiState
@@ -70,6 +68,7 @@ import com.erdem.nosi.ui.theme.CardBackgroundMedium
 import com.erdem.nosi.ui.theme.CardBorderColor
 import com.erdem.nosi.ui.theme.GradientGoldEnd
 import com.erdem.nosi.ui.theme.GradientGoldStart
+import com.erdem.nosi.ui.theme.NosiTheme
 import com.erdem.nosi.ui.theme.SectionHeaderColor
 import com.erdem.nosi.ui.theme.SubtleTextColor
 import com.erdem.nosi.ui.theme.White
@@ -123,8 +122,6 @@ private fun DictionaryInputContent(
     }
 
     val showDropdown = isFocused && suggestions.isNotEmpty()
-    Log.e("deneme", "suggestions: $suggestions")
-
     // Header gizlenme koşulu: input dolu ise gizle, boşsa göster
     val showHeader = query.isBlank()
 
