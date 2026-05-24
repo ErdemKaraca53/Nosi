@@ -106,17 +106,47 @@ object MockData {
         )
     )
 
-    val sampleDictionaryResult = DictionaryResult(
-        word = "Procrastinate",
-        type = "Verb",
-        definitions = listOf(
-            "To delay or postpone action; put off doing something.",
-            "To delay putting into practice."
+    val sampleDictionaryResults = listOf(
+        DictionaryResult(
+            word = "Run",
+            type = "Noun",
+            definitions = listOf(
+                "An act or spell of running.",
+                "A journey accomplished or route taken by a vehicle, aircraft, etc.",
+                "A continuous spell of a particular situation or condition."
+            ),
+            synonyms = listOf("Sprint", "Dash", "Jog", "Race", "Gallop"),
+            exampleSentences = listOf(
+                "I went for a run in the park this morning.",
+                "The play had a long run on Broadway."
+            )
         ),
-        synonyms = listOf("Delay", "Postpone", "Stall", "Dilly-dally"),
-        exampleSentences = listOf(
-            "I should start working on my project, but I keep procrastinating.",
-            "If you procrastinate too much, you will miss the deadline."
+        DictionaryResult(
+            word = "Run",
+            type = "Verb",
+            definitions = listOf(
+                "Move at a speed faster than a walk.",
+                "To manage or be in charge of.",
+                "To function or cause to function."
+            ),
+            synonyms = listOf("Sprint", "Dash", "Operate", "Manage", "Function"),
+            exampleSentences = listOf(
+                "She runs five miles every morning.",
+                "He runs a successful business.",
+                "The engine is running smoothly."
+            )
+        ),
+        DictionaryResult(
+            word = "Run",
+            type = "Adjective",
+            definitions = listOf(
+                "(of a liquid) having flowed.",
+                "Melted or made liquid."
+            ),
+            synonyms = listOf("Melted", "Liquefied", "Fluid"),
+            exampleSentences = listOf(
+                "Run butter was poured over the dish."
+            )
         )
     )
 }
