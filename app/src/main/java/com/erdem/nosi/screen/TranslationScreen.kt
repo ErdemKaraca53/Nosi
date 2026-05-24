@@ -126,7 +126,6 @@ fun TranslationScaffol(onNavigateBack: () -> Unit = {}) {
     var saveState by remember { mutableStateOf("IDLE") }
     val hasInput = inputText.isNotBlank()
 
-
     // Mock: gerçek implementasyonda burada API/DB çağrısı olacak
     val translationData = if (hasInput) MockData.sampleTranslationData else null
 
