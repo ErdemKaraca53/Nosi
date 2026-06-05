@@ -3,7 +3,8 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.google.gms.google.services)
-    kotlin("plugin.serialization") version "2.0.0"
+    alias(libs.plugins.ksp)
+    kotlin("plugin.serialization") version "2.2.0"
 }
 android {
     namespace = "com.erdem.nosi"
@@ -73,6 +74,10 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
 
     //Room Database
-    val room_version = "2.8.4"
-    implementation("androidx.room:room-runtime:${room_version}")
+    implementation(libs.room.runtime)
+    implementation(libs.room.ktx)
+    ksp(libs.room.compiler)
+
+    // Gson (JSON serialization for Room fields)
+    implementation("com.google.code.gson:gson:2.10.1")
 }

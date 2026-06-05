@@ -11,7 +11,9 @@ data class DictionaryApiResponse(
 @Serializable
 data class Meaning(
     val partOfSpeech: String,
-    val definitions: List<Definitions>
+    val definitions: List<Definitions>,
+    val synonyms: List<String> = emptyList(),
+    val antonyms: List<String> = emptyList()
 )
 
 @Serializable

@@ -19,6 +19,9 @@ class DictionaryViewModel: ViewModel() {
        Gelen değerleri uiState üzerinde gösterir.
     */
     fun getDictionary(word: String) {
+        // Zaten aynı kelime için sonuç varsa tekrar çekme
+        if (_uiState.value is DictionaryUiState.Success) return
+
         _uiState.value = DictionaryUiState.Loading
 
         viewModelScope.launch {
@@ -32,11 +35,12 @@ class DictionaryViewModel: ViewModel() {
                     _uiState.value = DictionaryUiState.Success(response)
                 }
             } catch (e : Exception) {
-                Log.e("deneme", "bos geldi")
+                Log.e("deneme", "hata: ${e.message}")
             }
         }
 
     }
+
 
 }
 

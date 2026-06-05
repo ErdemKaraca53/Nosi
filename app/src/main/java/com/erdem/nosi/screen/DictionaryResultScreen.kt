@@ -30,15 +30,18 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,8 +56,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.erdem.nosi.ViewModels.DatabaseViewModel
 import com.erdem.nosi.ViewModels.DictionaryUiState
 import com.erdem.nosi.ViewModels.DictionaryViewModel
+import com.erdem.nosi.ViewModels.SaveWordState
 import com.erdem.nosi.data.DictionaryApiResponse
 import com.erdem.nosi.data.Definitions
 import com.erdem.nosi.data.Meaning
@@ -69,27 +74,41 @@ import com.erdem.nosi.ui.theme.GradientTealStart
 import com.erdem.nosi.ui.theme.SectionHeaderColor
 import com.erdem.nosi.ui.theme.SubtleTextColor
 import com.erdem.nosi.ui.theme.White
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 // ─── Dictionary Result Ekranı ────────────────────────────────────────────────
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DictionaryResultScreen(
     word: String,
     onNavigateBack: () -> Unit = {}
 ) {
-    var saveState by remember { mutableStateOf("IDLE") }
+    val dictViewModel: DictionaryViewModel = viewModel()
+    val dbViewModel: DatabaseViewModel = viewModel()
 
-    val viewmodel: DictionaryViewModel = viewModel()
-    val uiState by viewmodel.uiState.collectAsStateWithLifecycle()
+    val uiState by dictViewModel.uiState.collectAsStateWithLifecycle()
+    val allLists by dbViewModel.allLists.collectAsStateWithLifecycle()
+    val saveWordState by dbViewModel.saveState.collectAsStateWithLifecycle()
 
-    viewmodel.getDictionary(word)
+    // Bottom sheet kontrolü
+    var showSaveSheet by remember { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
 
-    Log.e("deneme", "word: $word")
+    // Seçili anlam (sheet'e iletmek için)
+    var selectedMeaning by remember { mutableStateOf<Meaning?>(null) }
 
-    LaunchedEffect(saveState) {
-        if (saveState == "SAVING") {
-            delay(1000)
-            saveState = "SUCCESS"
+    LaunchedEffect(word) {
+        dictViewModel.getDictionary(word)
+    }
+
+    // Kayıt başarılı olunca sheet'i kapat
+    LaunchedEffect(saveWordState) {
+        if (saveWordState is SaveWordState.Saved || saveWordState is SaveWordState.AlreadyExists) {
+            scope.launch { sheetState.hide() }.invokeOnCompletion {
+                showSaveSheet = false
+                dbViewModel.resetSaveState()
+            }
         }
     }
 
@@ -103,7 +122,6 @@ fun DictionaryResultScreen(
     ) { innerPadding ->
         when (val state = uiState) {
             is DictionaryUiState.Loading -> {
-                // ── Loading State ──
                 Box(
                     modifier = Modifier
                         .padding(innerPadding)
@@ -129,12 +147,14 @@ fun DictionaryResultScreen(
             }
 
             is DictionaryUiState.Success -> {
-                // ── Sonuç State ──
                 DictionaryResultContent(
                     responses = state.response,
                     word = word,
-                    saveState = saveState,
-                    onSave = { saveState = "SAVING" },
+                    saveWordState = saveWordState,
+                    onSaveClick = { meaning ->
+                        selectedMeaning = meaning
+                        showSaveSheet = true
+                    },
                     modifier = Modifier
                         .padding(innerPadding)
                         .background(color = CardBackgroundDark)
@@ -143,6 +163,50 @@ fun DictionaryResultScreen(
             }
         }
     }
+
+    // ── Bottom Sheet ─────────────────────────────────────────────────────────
+    if (showSaveSheet && selectedMeaning != null) {
+        val meaning = selectedMeaning!!
+
+        // Bu kelimenin kayıtlı olduğu liste id'leri
+        val savedListIds by dbViewModel
+            .getListIdsForWord(word, meaning.partOfSpeech)
+            .collectAsStateWithLifecycle(initialValue = emptyList())
+
+        SaveToListBottomSheet(
+            word = word,
+            partOfSpeech = meaning.partOfSpeech,
+            existingLists = allLists,
+            savedListIds = savedListIds,
+            sheetState = sheetState,
+            onDismiss = {
+                showSaveSheet = false
+                dbViewModel.resetSaveState()
+            },
+            onSaveToList = { listId ->
+                dbViewModel.saveWord(
+                    listId = listId,
+                    word = word,
+                    partOfSpeech = meaning.partOfSpeech,
+                    definitions = meaning.definitions.map { it.definition },
+                    synonyms = meaning.synonyms,
+                    antonyms = meaning.antonyms
+                )
+            },
+            onCreateAndSave = { name, emoji, color ->
+                dbViewModel.createList(name, emoji, color) { newListId ->
+                    dbViewModel.saveWord(
+                        listId = newListId,
+                        word = word,
+                        partOfSpeech = meaning.partOfSpeech,
+                        definitions = meaning.definitions.map { it.definition },
+                        synonyms = meaning.synonyms,
+                        antonyms = meaning.antonyms
+                    )
+                }
+            }
+        )
+    }
 }
 
 // ─── Sonuç İçeriği (POS Seçici + Kart) ──────────────────────────────────────
@@ -150,33 +214,28 @@ fun DictionaryResultScreen(
 private fun DictionaryResultContent(
     responses: List<DictionaryApiResponse>,
     word: String,
-    saveState: String,
-    onSave: () -> Unit,
+    saveWordState: SaveWordState,
+    onSaveClick: (Meaning) -> Unit,
     modifier: Modifier = Modifier
 ) {
     if (responses.isEmpty()) return
 
-    // Tüm response'lardan tüm meaning'leri düzleştir (flatten)
     val allMeanings = remember(responses) {
         responses.flatMap { it.meanings }
     }
-
     if (allMeanings.isEmpty()) return
 
-    // Mevcut part of speech tiplerini çıkar
     val posTypes = remember(allMeanings) {
         allMeanings.map { it.partOfSpeech }
     }
 
-    // Noun varsa default seç, yoksa ilk elemanı seç
     var selectedIndex by remember(posTypes) {
         val nounIndex = posTypes.indexOfFirst { it.equals("noun", ignoreCase = true) }
         mutableIntStateOf(if (nounIndex >= 0) nounIndex else 0)
     }
 
     Column(
-        modifier = modifier
-            .verticalScroll(rememberScrollState()),
+        modifier = modifier.verticalScroll(rememberScrollState()),
     ) {
         Spacer(modifier = Modifier.height(20.dp))
 
@@ -187,7 +246,6 @@ private fun DictionaryResultContent(
                 .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Baş harf dairesi
             Box(
                 modifier = Modifier
                     .size(64.dp)
@@ -266,9 +324,9 @@ private fun DictionaryResultContent(
                 verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
                 MeaningResultCard(meaning = allMeanings[targetIndex])
-                SaveTranslationButton(
-                    saveState = saveState,
-                    onSave = onSave
+                SaveWordButton(
+                    saveWordState = saveWordState,
+                    onSave = { onSaveClick(allMeanings[targetIndex]) }
                 )
                 Spacer(modifier = Modifier.height(20.dp))
             }
@@ -429,26 +487,26 @@ fun MeaningResultCard(meaning: Meaning) {
                 }
 
                 // ── Bu tanıma ait Example ────────────────────────────────
-                Spacer(modifier = Modifier.height(10.dp))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 40.dp),
-                    verticalAlignment = Alignment.Top
-                ) {
-                    Box(
+                if (def.example != null) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(
                         modifier = Modifier
-                            .padding(top = 4.dp, end = 10.dp)
-                            .width(3.dp)
-                            .height(14.dp)
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(
-                                Brush.linearGradient(
-                                    colors = listOf(GradientTealStart, GradientTealEnd)
+                            .fillMaxWidth()
+                            .padding(start = 40.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .padding(top = 4.dp, end = 10.dp)
+                                .width(3.dp)
+                                .height(14.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(
+                                    Brush.linearGradient(
+                                        colors = listOf(GradientTealStart, GradientTealEnd)
+                                    )
                                 )
-                            )
-                    )
-                    if (def.example != null) {
+                        )
                         Text(
                             text = "\"${def.example}\"",
                             color = SubtleTextColor,
@@ -457,24 +515,17 @@ fun MeaningResultCard(meaning: Meaning) {
                             fontFamily = LexendFontFamily,
                             lineHeight = 20.sp
                         )
-                    } else {
-                        Text(
-                            text = "No example provided",
-                            color = SubtleTextColor.copy(alpha = 0.5f),
-                            fontSize = 14.sp,
-                            fontStyle = FontStyle.Italic,
-                            fontFamily = LexendFontFamily,
-                            lineHeight = 20.sp
-                        )
                     }
                 }
+            }
 
-                // ── Bu tanıma ait Synonyms ───────────────────────────────
-                Spacer(modifier = Modifier.height(12.dp))
+            // ── Meaning Seviyesi: Synonyms ───────────────────────────────
+            if (meaning.synonyms.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(20.dp))
+                GradientDivider()
+                Spacer(modifier = Modifier.height(16.dp))
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 40.dp),
+                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.Top
                 ) {
                     Text(
@@ -484,67 +535,54 @@ fun MeaningResultCard(meaning: Meaning) {
                         fontWeight = FontWeight.Bold,
                         fontFamily = LexendFontFamily,
                         letterSpacing = 0.5.sp,
-                        modifier = Modifier
-                            .padding(top = 6.dp, end = 10.dp)
+                        modifier = Modifier.padding(top = 6.dp, end = 10.dp)
                     )
-                    
-                    if (def.synonyms.isNotEmpty()) {
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            def.synonyms.forEach { synonym ->
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(
-                                            Brush.linearGradient(
-                                                colors = listOf(
-                                                    GradientTealStart.copy(alpha = 0.15f),
-                                                    GradientTealEnd.copy(alpha = 0.08f)
-                                                )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        meaning.synonyms.forEach { synonym ->
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(
+                                        Brush.linearGradient(
+                                            colors = listOf(
+                                                GradientTealStart.copy(alpha = 0.15f),
+                                                GradientTealEnd.copy(alpha = 0.08f)
                                             )
                                         )
-                                        .border(
-                                            width = 1.dp,
-                                            brush = Brush.linearGradient(
-                                                colors = listOf(
-                                                    GradientTealStart.copy(alpha = 0.5f),
-                                                    GradientTealEnd.copy(alpha = 0.25f)
-                                                )
-                                            ),
-                                            shape = RoundedCornerShape(10.dp)
-                                        )
-                                        .padding(horizontal = 10.dp, vertical = 5.dp)
-                                ) {
-                                    Text(
-                                        text = synonym,
-                                        color = White,
-                                        fontSize = 12.sp,
-                                        fontFamily = LexendFontFamily
                                     )
-                                }
+                                    .border(
+                                        width = 1.dp,
+                                        brush = Brush.linearGradient(
+                                            colors = listOf(
+                                                GradientTealStart.copy(alpha = 0.5f),
+                                                GradientTealEnd.copy(alpha = 0.25f)
+                                            )
+                                        ),
+                                        shape = RoundedCornerShape(10.dp)
+                                    )
+                                    .padding(horizontal = 10.dp, vertical = 5.dp)
+                            ) {
+                                Text(
+                                    text = synonym,
+                                    color = White,
+                                    fontSize = 12.sp,
+                                    fontFamily = LexendFontFamily
+                                )
                             }
                         }
-                    } else {
-                        Text(
-                            text = "No synonyms",
-                            color = SubtleTextColor.copy(alpha = 0.5f),
-                            fontSize = 13.sp,
-                            fontStyle = FontStyle.Italic,
-                            fontFamily = LexendFontFamily,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
                     }
                 }
+            }
 
-                // ── Bu tanıma ait Antonyms ───────────────────────────────
+            // ── Meaning Seviyesi: Antonyms ───────────────────────────────
+            if (meaning.antonyms.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(10.dp))
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 40.dp),
+                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.Top
                 ) {
                     Text(
@@ -554,58 +592,45 @@ fun MeaningResultCard(meaning: Meaning) {
                         fontWeight = FontWeight.Bold,
                         fontFamily = LexendFontFamily,
                         letterSpacing = 0.5.sp,
-                        modifier = Modifier
-                            .padding(top = 6.dp, end = 10.dp)
+                        modifier = Modifier.padding(top = 6.dp, end = 10.dp)
                     )
-                    
-                    if (def.antonyms.isNotEmpty()) {
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            def.antonyms.forEach { antonym ->
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(
-                                            Brush.linearGradient(
-                                                colors = listOf(
-                                                    GradientGoldStart.copy(alpha = 0.12f),
-                                                    GradientGoldEnd.copy(alpha = 0.06f)
-                                                )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        meaning.antonyms.forEach { antonym ->
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(
+                                        Brush.linearGradient(
+                                            colors = listOf(
+                                                GradientGoldStart.copy(alpha = 0.12f),
+                                                GradientGoldEnd.copy(alpha = 0.06f)
                                             )
                                         )
-                                        .border(
-                                            width = 1.dp,
-                                            brush = Brush.linearGradient(
-                                                colors = listOf(
-                                                    GradientGoldStart.copy(alpha = 0.4f),
-                                                    GradientGoldEnd.copy(alpha = 0.2f)
-                                                )
-                                            ),
-                                            shape = RoundedCornerShape(10.dp)
-                                        )
-                                        .padding(horizontal = 10.dp, vertical = 5.dp)
-                                ) {
-                                    Text(
-                                        text = antonym,
-                                        color = White.copy(alpha = 0.9f),
-                                        fontSize = 12.sp,
-                                        fontFamily = LexendFontFamily
                                     )
-                                }
+                                    .border(
+                                        width = 1.dp,
+                                        brush = Brush.linearGradient(
+                                            colors = listOf(
+                                                GradientGoldStart.copy(alpha = 0.4f),
+                                                GradientGoldEnd.copy(alpha = 0.2f)
+                                            )
+                                        ),
+                                        shape = RoundedCornerShape(10.dp)
+                                    )
+                                    .padding(horizontal = 10.dp, vertical = 5.dp)
+                            ) {
+                                Text(
+                                    text = antonym,
+                                    color = White.copy(alpha = 0.9f),
+                                    fontSize = 12.sp,
+                                    fontFamily = LexendFontFamily
+                                )
                             }
                         }
-                    } else {
-                        Text(
-                            text = "No antonyms",
-                            color = SubtleTextColor.copy(alpha = 0.5f),
-                            fontSize = 13.sp,
-                            fontStyle = FontStyle.Italic,
-                            fontFamily = LexendFontFamily,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
                     }
                 }
             }
@@ -613,7 +638,77 @@ fun MeaningResultCard(meaning: Meaning) {
     }
 }
 
-// ─── Preview ─────────────────────────────────────────────────────────────────
+// ─── Save Word Button ───────────────────────────────────────────────────
+@Composable
+fun SaveWordButton(
+    saveWordState: SaveWordState,
+    onSave: () -> Unit
+) {
+    val isSaved = saveWordState is SaveWordState.Saved
+    val isAlreadySaved = saveWordState is SaveWordState.AlreadyExists
+    val isSaving = saveWordState is SaveWordState.Saving
+    val isDone = isSaved || isAlreadySaved
+
+    val backgroundBrush = when {
+        isDone -> Brush.linearGradient(listOf(GradientTealStart, GradientTealEnd))
+        else   -> Brush.linearGradient(listOf(GradientGoldStart, GradientGoldEnd))
+    }
+
+    Box(
+        modifier = Modifier
+            .padding(horizontal = 16.dp)
+            .fillMaxWidth()
+            .height(52.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(backgroundBrush)
+            .clickable(
+                enabled = !isSaving && !isDone,
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() }
+            ) { onSave() },
+        contentAlignment = Alignment.Center
+    ) {
+        when {
+            isSaving -> CircularProgressIndicator(
+                modifier = Modifier.size(22.dp),
+                color = White,
+                strokeWidth = 2.dp
+            )
+            isSaved -> Text(
+                text = "✓ Saved",
+                color = White,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = LexendFontFamily
+            )
+            isAlreadySaved -> Text(
+                text = "✓ Already Saved",
+                color = White,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = LexendFontFamily
+            )
+            else -> Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "💾",
+                    fontSize = 16.sp
+                )
+                Text(
+                    text = "Save Word",
+                    color = White,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = LexendFontFamily
+                )
+            }
+        }
+    }
+}
+
+// ─── Preview ───────────────────────────────────────────────────
 @Preview(showBackground = true)
 @Composable
 fun DictionaryResultScreenPreview() {
@@ -625,40 +720,44 @@ fun DictionaryResultScreenPreview() {
                     definitions = listOf(
                         Definitions(
                             definition = "An act or spell of running.",
-                            synonyms = listOf("sprint", "dash", "jog"),
-                            antonyms = listOf("walk", "stroll"),
+                            synonyms = emptyList(),
+                            antonyms = emptyList(),
                             example = "I went for a run in the park."
                         ),
                         Definitions(
                             definition = "A continuous spell of a particular situation.",
-                            synonyms = listOf("stretch", "spell"),
+                            synonyms = emptyList(),
                             antonyms = emptyList(),
                             example = "The play had a long run on Broadway."
                         )
-                    )
+                    ),
+                    synonyms = listOf("sprint", "dash", "jog", "stretch"),
+                    antonyms = listOf("walk", "stroll")
                 ),
                 Meaning(
                     partOfSpeech = "verb",
                     definitions = listOf(
                         Definitions(
                             definition = "Move at a speed faster than a walk.",
-                            synonyms = listOf("sprint", "dash", "race"),
-                            antonyms = listOf("walk", "crawl"),
+                            synonyms = emptyList(),
+                            antonyms = emptyList(),
                             example = "She runs five miles every morning."
                         ),
                         Definitions(
                             definition = "To manage or be in charge of.",
-                            synonyms = listOf("manage", "operate", "direct"),
+                            synonyms = emptyList(),
                             antonyms = emptyList(),
                             example = "He runs a successful business."
                         ),
                         Definitions(
                             definition = "To function or cause to function.",
-                            synonyms = listOf("operate", "function", "work"),
+                            synonyms = emptyList(),
                             antonyms = emptyList(),
                             example = "The engine is running smoothly."
                         )
-                    )
+                    ),
+                    synonyms = listOf("sprint", "dash", "race", "manage", "operate", "direct"),
+                    antonyms = listOf("walk", "crawl")
                 )
             )
         )
@@ -668,8 +767,8 @@ fun DictionaryResultScreenPreview() {
         DictionaryResultContent(
             responses = mockResponses,
             word = "run",
-            saveState = "IDLE",
-            onSave = {},
+            saveWordState = SaveWordState.Idle,
+            onSaveClick = {},
             modifier = Modifier
                 .background(CardBackgroundDark)
                 .fillMaxSize()
