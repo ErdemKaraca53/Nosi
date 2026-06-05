@@ -71,4 +71,8 @@ dependencies {
     // Kotlinx Serialization için resmi dönüştürücü:
     implementation("com.squareup.retrofit2:converter-kotlinx-serialization:2.11.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+
+    //Room Database
+    val room_version = "2.8.4"
+    implementation("androidx.room:room-runtime:${room_version}")
 }
