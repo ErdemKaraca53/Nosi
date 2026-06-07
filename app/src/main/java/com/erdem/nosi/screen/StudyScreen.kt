@@ -1,10 +1,13 @@
 package com.erdem.nosi.screen
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -52,11 +56,13 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.erdem.nosi.ViewModels.DatabaseViewModel
+import com.erdem.nosi.audio.rememberWordSpeaker
 import com.erdem.nosi.model.StudyWord
 import com.erdem.nosi.ui.theme.CardBackgroundDark
 import com.erdem.nosi.ui.theme.CardBackgroundMedium
 import com.erdem.nosi.ui.theme.CardBorderColor
 import com.erdem.nosi.ui.theme.GlowTeal
+import com.erdem.nosi.ui.theme.GradientGoldStart
 import com.erdem.nosi.ui.theme.GradientTealEnd
 import com.erdem.nosi.ui.theme.GradientTealStart
 import com.erdem.nosi.ui.theme.NosiTheme
@@ -83,8 +89,8 @@ fun StudyScreen(
 
     val collectionName = allLists.find { it.id == collectionId }?.name ?: "Study"
 
-    // Deste seans boyunca sabit kalsın (az bilinenler önce). Mastery güncellemeleri
-    // DB'ye yazılır ama ekrandaki sıra seans içinde karışmaz.
+    // Deste seans boyunca sabit (az bilinenler önce). Mastery güncellemeleri DB'ye
+    // yazılır ama ekrandaki sıra seans içinde karışmaz.
     var deck by remember { mutableStateOf<List<StudyWord>>(emptyList()) }
     LaunchedEffect(liveWords) {
         if (deck.isEmpty() && liveWords.isNotEmpty()) {
@@ -116,7 +122,16 @@ private fun StudyContent(
     onNeedsReview: (StudyWord) -> Unit,
     onNavigateBack: () -> Unit
 ) {
-    var currentIndex by remember { mutableIntStateOf(0) }
+    val speak = rememberWordSpeaker()
+
+    // Aktif çalışma destesi (tüm liste / "tekrar et" alt kümesi olabilir)
+    var sessionDeck by remember(words) { mutableStateOf(words) }
+    var currentIndex by remember(sessionDeck) { mutableIntStateOf(0) }
+
+    // Seans istatistikleri
+    var knownCount by remember(sessionDeck) { mutableIntStateOf(0) }
+    var reviewCount by remember(sessionDeck) { mutableIntStateOf(0) }
+    val reviewAgain = remember(sessionDeck) { mutableStateListOf<StudyWord>() }
 
     Scaffold(
         topBar = {
@@ -147,130 +162,136 @@ private fun StudyContent(
                     }
                 }
 
-                currentIndex >= words.size -> {
-                    // Tamamlandı
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(32.dp)
-                    ) {
-                        Text(text = "🎉", fontSize = 64.sp)
-                        Spacer(modifier = Modifier.height(20.dp))
-                        Text(
-                            text = "Well done!",
-                            color = White,
-                            fontSize = 28.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = LexendFontFamily
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "You've reviewed all ${words.size} word${if (words.size != 1) "s" else ""}",
-                            color = SubtleTextColor,
-                            fontSize = 16.sp,
-                            fontFamily = LexendFontFamily,
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(modifier = Modifier.height(32.dp))
-
-                        // Restart button
-                        Surface(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(14.dp)),
-                            color = GradientTealStart,
-                            shape = RoundedCornerShape(14.dp),
-                            onClick = { currentIndex = 0 }
-                        ) {
-                            Text(
-                                modifier = Modifier.padding(horizontal = 32.dp, vertical = 14.dp),
-                                text = "Restart",
-                                color = White,
-                                fontSize = 17.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                fontFamily = LexendFontFamily
-                            )
+                currentIndex >= sessionDeck.size -> {
+                    // ── Seans Özeti ──
+                    SessionSummary(
+                        total = sessionDeck.size,
+                        knownCount = knownCount,
+                        reviewCount = reviewCount,
+                        canReviewMissed = reviewAgain.isNotEmpty(),
+                        onReviewMissed = {
+                            val missed = reviewAgain.toList()
+                            sessionDeck = missed   // remember(sessionDeck) → index/sayaç sıfırlanır
+                        },
+                        onRestartAll = {
+                            sessionDeck = words
                         }
-                    }
+                    )
                 }
 
                 else -> {
+                    val scope = rememberCoroutineScope()
+                    val offsetX = remember { Animatable(0f) }
+                    val screenWidth = LocalConfiguration.current.screenWidthDp
+                    val swipeThreshold = screenWidth * 0.35f
+                    val dragProgress = (offsetX.value.absoluteValue / swipeThreshold).coerceIn(0f, 1f)
+
+                    var revealed by remember(currentIndex) { mutableStateOf(false) }
+                    var isAdvancing by remember { mutableStateOf(false) }
+
+                    // Kartı bir sonrakine geçir (known = sağ, !known = sol)
+                    fun advance(known: Boolean) {
+                        if (isAdvancing || currentIndex >= sessionDeck.size) return
+                        isAdvancing = true
+                        val word = sessionDeck[currentIndex]
+                        if (known) {
+                            knownCount++
+                            onKnown(word)
+                        } else {
+                            reviewCount++
+                            onNeedsReview(word)
+                            if (reviewAgain.none { it.id == word.id }) reviewAgain.add(word)
+                        }
+                        scope.launch {
+                            offsetX.animateTo(
+                                targetValue = if (known) screenWidth * 2f else -screenWidth * 2f,
+                                animationSpec = tween(220)
+                            )
+                            currentIndex++
+                            offsetX.snapTo(0f)
+                            isAdvancing = false
+                        }
+                    }
+
                     Column(
                         modifier = Modifier.fillMaxSize(),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // Progress
+                        // ── İlerleme çubuğu + sayaç ──
                         Spacer(modifier = Modifier.height(16.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 24.dp)
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(CardBorderColor.copy(alpha = 0.3f))
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(currentIndex.toFloat() / sessionDeck.size)
+                                    .height(6.dp)
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(Brush.linearGradient(listOf(GradientTealStart, GradientTealEnd)))
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "${currentIndex + 1} / ${words.size}",
+                            text = "${currentIndex + 1} / ${sessionDeck.size}",
                             color = SubtleTextColor,
                             fontSize = 14.sp,
-                            fontFamily = LexendFontFamily,
-                            fontWeight = FontWeight.Normal
+                            fontFamily = LexendFontFamily
                         )
 
-                        // Card area
-                        val scope = rememberCoroutineScope()
-                        val offsetX = remember { Animatable(0f) }
-                        val screenWidth = LocalConfiguration.current.screenWidthDp
-                        val swipeThreshold = screenWidth * 0.35f
-                        val dragProgress = (offsetX.value.absoluteValue / swipeThreshold).coerceIn(0f, 1f)
-
-                        // Aktif kartın "çevrilmiş" (anlam görünür) durumu — her kelimede sıfırlanır
-                        var revealed by remember(currentIndex) { mutableStateOf(false) }
-
+                        // ── Kart alanı ──
                         Box(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxWidth(),
                             contentAlignment = Alignment.Center
                         ) {
-                            val remaining = words.size - currentIndex
+                            val remaining = sessionDeck.size - currentIndex
 
-                            // 3. kart (en altta)
                             if (remaining > 3) {
                                 FlashCard(
-                                    word = words[currentIndex + 3],
-                                    revealed = false,
-                                    modifier = Modifier
-                                        .graphicsLayer {
-                                            rotationZ = 5f
-                                            translationX = 8f
-                                            translationY = 6f
-                                            alpha = 0.2f
-                                        }
+                                    word = sessionDeck[currentIndex + 3],
+                                    showBack = false,
+                                    modifier = Modifier.graphicsLayer {
+                                        rotationZ = 5f; translationX = 8f; translationY = 6f; alpha = 0.2f
+                                    }
                                 )
                             }
-
-                            // 2. kart
                             if (remaining > 2) {
                                 FlashCard(
-                                    word = words[currentIndex + 2],
-                                    revealed = false,
-                                    modifier = Modifier
-                                        .graphicsLayer {
-                                            rotationZ = -3f + (dragProgress * 1f)
-                                            translationX = -5f + (dragProgress * 2f)
-                                            translationY = 4f - (dragProgress * 1f)
-                                            alpha = 0.35f + (dragProgress * 0.1f)
-                                        }
+                                    word = sessionDeck[currentIndex + 2],
+                                    showBack = false,
+                                    modifier = Modifier.graphicsLayer {
+                                        rotationZ = -3f + (dragProgress * 1f)
+                                        translationX = -5f + (dragProgress * 2f)
+                                        translationY = 4f - (dragProgress * 1f)
+                                        alpha = 0.35f + (dragProgress * 0.1f)
+                                    }
                                 )
                             }
-
-                            // 1. kart
                             if (remaining > 1) {
                                 FlashCard(
-                                    word = words[currentIndex + 1],
-                                    revealed = false,
-                                    modifier = Modifier
-                                        .graphicsLayer {
-                                            rotationZ = 2f * (1f - dragProgress)
-                                            translationX = 4f * (1f - dragProgress)
-                                            translationY = 2f * (1f - dragProgress)
-                                            alpha = 0.55f + (dragProgress * 0.45f)
-                                        }
+                                    word = sessionDeck[currentIndex + 1],
+                                    showBack = false,
+                                    modifier = Modifier.graphicsLayer {
+                                        rotationZ = 2f * (1f - dragProgress)
+                                        translationX = 4f * (1f - dragProgress)
+                                        translationY = 2f * (1f - dragProgress)
+                                        alpha = 0.55f + (dragProgress * 0.45f)
+                                    }
                                 )
                             }
 
-                            // Aktif kart (swipe + tap-to-flip)
+                            // Aktif kart (swipe + tap-to-flip + 3D flip)
+                            val flip by animateFloatAsState(
+                                targetValue = if (revealed) 180f else 0f,
+                                animationSpec = tween(420),
+                                label = "cardFlip"
+                            )
                             Box(
                                 modifier = Modifier
                                     .offset { IntOffset(offsetX.value.roundToInt(), 0) }
@@ -279,6 +300,8 @@ private fun StudyContent(
                                         val scale = 1f - (offsetX.value.absoluteValue / 3000f).coerceIn(0f, 0.05f)
                                         scaleX = scale
                                         scaleY = scale
+                                        rotationY = flip
+                                        cameraDistance = 16f * density
                                     }
                                     .pointerInput(currentIndex) {
                                         detectTapGestures(onTap = { revealed = !revealed })
@@ -286,67 +309,53 @@ private fun StudyContent(
                                     .pointerInput(currentIndex) {
                                         detectHorizontalDragGestures(
                                             onDragEnd = {
-                                                scope.launch {
-                                                    when {
-                                                        offsetX.value > swipeThreshold -> {
-                                                            // Sağa → "öğrendim"
-                                                            onKnown(words[currentIndex])
-                                                            offsetX.animateTo(
-                                                                targetValue = screenWidth * 2f,
-                                                                animationSpec = tween(200)
-                                                            )
-                                                            currentIndex++
-                                                            offsetX.snapTo(0f)
-                                                        }
-                                                        offsetX.value < -swipeThreshold -> {
-                                                            // Sola → "tekrar et"
-                                                            onNeedsReview(words[currentIndex])
-                                                            offsetX.animateTo(
-                                                                targetValue = -screenWidth * 2f,
-                                                                animationSpec = tween(200)
-                                                            )
-                                                            currentIndex++
-                                                            offsetX.snapTo(0f)
-                                                        }
-                                                        else -> {
-                                                            offsetX.animateTo(
-                                                                targetValue = 0f,
-                                                                animationSpec = tween(400)
-                                                            )
-                                                        }
+                                                when {
+                                                    offsetX.value > swipeThreshold -> advance(known = true)
+                                                    offsetX.value < -swipeThreshold -> advance(known = false)
+                                                    else -> scope.launch {
+                                                        offsetX.animateTo(0f, tween(300))
                                                     }
                                                 }
                                             },
                                             onHorizontalDrag = { _, dragAmount ->
-                                                scope.launch {
-                                                    offsetX.snapTo(offsetX.value + dragAmount)
-                                                }
+                                                scope.launch { offsetX.snapTo(offsetX.value + dragAmount) }
                                             }
                                         )
                                     }
                             ) {
-                                FlashCard(word = words[currentIndex], revealed = revealed)
+                                val showingBack = flip > 90f
+                                FlashCard(
+                                    word = sessionDeck[currentIndex],
+                                    showBack = showingBack,
+                                    onSpeak = { speak(sessionDeck[currentIndex].word) },
+                                    modifier = if (showingBack) {
+                                        Modifier.graphicsLayer { rotationY = 180f }
+                                    } else {
+                                        Modifier
+                                    }
+                                )
                             }
                         }
 
-                        // Swipe hints
+                        // ── Review / Got it butonları ──
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 48.dp, vertical = 24.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween
+                                .padding(horizontal = 24.dp, vertical = 20.dp),
+                            horizontalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
-                            Text(
-                                text = "← Review",
-                                color = SubtleTextColor.copy(alpha = 0.6f),
-                                fontSize = 14.sp,
-                                fontFamily = LexendFontFamily
+                            StudyActionButton(
+                                modifier = Modifier.weight(1f),
+                                label = "↻  Review",
+                                accent = GradientGoldStart,
+                                onClick = { advance(known = false) }
                             )
-                            Text(
-                                text = "Got it →",
-                                color = GradientTealStart.copy(alpha = 0.6f),
-                                fontSize = 14.sp,
-                                fontFamily = LexendFontFamily
+                            StudyActionButton(
+                                modifier = Modifier.weight(1f),
+                                label = "Got it  ✓",
+                                accent = GradientTealStart,
+                                filled = true,
+                                onClick = { advance(known = true) }
                             )
                         }
                     }
@@ -357,14 +366,145 @@ private fun StudyContent(
 }
 
 // ──────────────────────────────────────
-// Flash Card (iskambil kartı şeklinde, iki yüzlü)
+// Seans Özeti Ekranı
+// ──────────────────────────────────────
+@Composable
+private fun SessionSummary(
+    total: Int,
+    knownCount: Int,
+    reviewCount: Int,
+    canReviewMissed: Boolean,
+    onReviewMissed: () -> Unit,
+    onRestartAll: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.padding(32.dp)
+    ) {
+        Text(text = if (reviewCount == 0) "🎉" else "💪", fontSize = 64.sp)
+        Spacer(modifier = Modifier.height(20.dp))
+        Text(
+            text = if (reviewCount == 0) "Perfect!" else "Session complete",
+            color = White,
+            fontSize = 28.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = LexendFontFamily
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "You reviewed $total word${if (total != 1) "s" else ""}",
+            color = SubtleTextColor,
+            fontSize = 15.sp,
+            fontFamily = LexendFontFamily,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // İstatistik rozetleri
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            StatPill(value = knownCount, label = "Known", accent = GradientTealStart)
+            StatPill(value = reviewCount, label = "To review", accent = GradientGoldStart)
+        }
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        // "Bilemediklerini tekrar et"
+        if (canReviewMissed) {
+            StudyActionButton(
+                modifier = Modifier.fillMaxWidth(),
+                label = "↻  Review the $reviewCount you missed",
+                accent = GradientGoldStart,
+                filled = true,
+                onClick = onReviewMissed
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+
+        StudyActionButton(
+            modifier = Modifier.fillMaxWidth(),
+            label = "Restart all",
+            accent = GradientTealStart,
+            filled = !canReviewMissed,
+            onClick = onRestartAll
+        )
+    }
+}
+
+@Composable
+private fun StatPill(value: Int, label: String, accent: Color) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(accent.copy(alpha = 0.12f))
+            .padding(horizontal = 28.dp, vertical = 16.dp)
+    ) {
+        Text(
+            text = "$value",
+            color = accent,
+            fontSize = 28.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = LexendFontFamily
+        )
+        Text(
+            text = label,
+            color = SubtleTextColor,
+            fontSize = 13.sp,
+            fontFamily = LexendFontFamily
+        )
+    }
+}
+
+// ──────────────────────────────────────
+// Çalışma Aksiyon Butonu (Review / Got it / Restart)
+// ──────────────────────────────────────
+@Composable
+private fun StudyActionButton(
+    label: String,
+    accent: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    filled: Boolean = false
+) {
+    Box(
+        modifier = modifier
+            .height(52.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .then(
+                if (filled) {
+                    Modifier.background(Brush.linearGradient(listOf(accent, accent.copy(alpha = 0.7f))))
+                } else {
+                    Modifier.background(accent.copy(alpha = 0.12f))
+                }
+            )
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() },
+                onClick = onClick
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            color = if (filled) White else accent,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = LexendFontFamily
+        )
+    }
+}
+
+// ──────────────────────────────────────
+// Flash Card (iki yüzlü: ön = kelime, arka = anlam)
 // ──────────────────────────────────────
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun FlashCard(
     word: StudyWord,
-    revealed: Boolean,
-    modifier: Modifier = Modifier
+    showBack: Boolean,
+    modifier: Modifier = Modifier,
+    onSpeak: (() -> Unit)? = null
 ) {
     Surface(
         modifier = modifier
@@ -395,22 +535,23 @@ private fun FlashCard(
                 }
             }
 
-            // Alt köşe süsü (düz okunur — ters değil)
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(16.dp)
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = word.partOfSpeech.take(3).uppercase(),
-                        color = GradientTealStart.copy(alpha = 0.4f),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = LexendFontFamily,
-                        letterSpacing = 1.sp
-                    )
-                    Text(text = "♦", color = GradientTealStart.copy(alpha = 0.4f), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            // Telaffuz butonu (sağ üst)
+            if (onSpeak != null) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(12.dp)
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(GradientTealStart.copy(alpha = 0.15f))
+                        .clickable(
+                            indication = null,
+                            interactionSource = remember { MutableInteractionSource() },
+                            onClick = onSpeak
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(text = "🔊", fontSize = 18.sp)
                 }
             }
 
@@ -471,7 +612,6 @@ private fun FlashCard(
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                // Orta çizgi
                 Box(
                     modifier = Modifier
                         .width(60.dp)
@@ -486,7 +626,7 @@ private fun FlashCard(
                 Spacer(modifier = Modifier.height(20.dp))
 
                 // Ön yüz: ipucu — Arka yüz: anlam(lar)
-                if (!revealed) {
+                if (!showBack) {
                     Text(
                         text = "👆 Tap to reveal meaning",
                         color = SubtleTextColor.copy(alpha = 0.7f),
@@ -501,7 +641,6 @@ private fun FlashCard(
                             .verticalScroll(rememberScrollState()),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // Türkçe anlam — birincil (varsa)
                         if (word.meaningTr.isNotBlank()) {
                             Text(
                                 text = word.meaningTr,
@@ -515,7 +654,6 @@ private fun FlashCard(
                             Spacer(modifier = Modifier.height(12.dp))
                         }
 
-                        // İngilizce tanım(lar) — ikincil
                         if (word.definitions.isEmpty() && word.meaningTr.isBlank()) {
                             Text(
                                 text = "No meaning saved",

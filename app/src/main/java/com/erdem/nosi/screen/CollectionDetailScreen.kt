@@ -16,14 +16,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -216,20 +217,18 @@ private fun CollectionDetailContent(
                 }
             }
         } else {
-            Column(
+            LazyColumn(
                 modifier = Modifier
                     .padding(innerPadding)
                     .background(color = CardBackgroundDark)
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState()),
+                    .fillMaxSize(),
+                contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Spacer(modifier = Modifier.height(4.dp))
-
                 // ── Cümleler Bölümü ──
                 if (sentences.isNotEmpty()) {
-                    SectionLabel(text = "📝  Sentences (${sentences.size})")
-                    sentences.forEach { sentence ->
+                    item { SectionLabel(text = "📝  Sentences (${sentences.size})") }
+                    items(sentences, key = { "sentence-${it.id}" }) { sentence ->
                         SentenceCard(
                             sentence = sentence,
                             onLongPress = { pendingDeleteSentence = sentence }
@@ -239,50 +238,50 @@ private fun CollectionDetailContent(
 
                 // ── Kelimeler Bölümü ──
                 if (words.isNotEmpty()) {
-                    SectionLabel(text = "📚  Words (${words.size})")
+                    item { SectionLabel(text = "📚  Words (${words.size})") }
 
                     // Çalışma butonu
-                    StudyButton(onClick = onNavigateToStudy)
+                    item { StudyButton(onClick = onNavigateToStudy) }
 
                     // İlerleme
-                    val learned = words.count { it.isKnown }
-                    Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(6.dp)
-                                .clip(RoundedCornerShape(3.dp))
-                                .background(CardBorderColor.copy(alpha = 0.3f))
-                        ) {
+                    item {
+                        val learned = words.count { it.isKnown }
+                        Column(modifier = Modifier.padding(horizontal = 20.dp)) {
                             Box(
                                 modifier = Modifier
-                                    .fillMaxWidth(learned.toFloat() / words.size)
+                                    .fillMaxWidth()
                                     .height(6.dp)
                                     .clip(RoundedCornerShape(3.dp))
-                                    .background(
-                                        Brush.linearGradient(listOf(GradientTealStart, GradientTealEnd))
-                                    )
+                                    .background(CardBorderColor.copy(alpha = 0.3f))
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth(learned.toFloat() / words.size)
+                                        .height(6.dp)
+                                        .clip(RoundedCornerShape(3.dp))
+                                        .background(
+                                            Brush.linearGradient(listOf(GradientTealStart, GradientTealEnd))
+                                        )
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "✓ $learned of ${words.size} learned",
+                                color = GradientTealStart,
+                                fontSize = 12.sp,
+                                fontFamily = LexendFontFamily,
+                                fontWeight = FontWeight.Medium
                             )
                         }
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "✓ $learned of ${words.size} learned",
-                            color = GradientTealStart,
-                            fontSize = 12.sp,
-                            fontFamily = LexendFontFamily,
-                            fontWeight = FontWeight.Medium
-                        )
                     }
 
-                    words.forEach { word ->
+                    items(words, key = { "word-${it.id}" }) { word ->
                         SavedWordCard(
                             word = word,
                             onLongPress = { pendingDeleteWord = word }
                         )
                     }
                 }
-
-                Spacer(modifier = Modifier.height(24.dp))
             }
         }
     }
