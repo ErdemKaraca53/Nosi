@@ -1,9 +1,11 @@
 package com.erdem.nosi.screen
 
 import androidx.annotation.DrawableRes
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +22,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -27,11 +30,13 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults.topAppBarColors
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,9 +52,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.erdem.nosi.R
-import com.erdem.nosi.model.CollectionSummary
-import com.erdem.nosi.model.MockData
+import com.erdem.nosi.ViewModels.DatabaseViewModel
+import com.erdem.nosi.database.WordListEntity
 import com.erdem.nosi.ui.theme.CardBackgroundDark
 import com.erdem.nosi.ui.theme.CardBackgroundMedium
 import com.erdem.nosi.ui.theme.CardBorderColor
@@ -64,6 +71,8 @@ import com.erdem.nosi.ui.theme.SectionHeaderColor
 import com.erdem.nosi.ui.theme.SubtleTextColor
 import com.erdem.nosi.ui.theme.TopBarColor
 import com.erdem.nosi.ui.theme.White
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 
 
 // ──────────────────────────────────────
@@ -156,7 +165,70 @@ fun MainScreenContent(
     onNavigateToWordLookup: () -> Unit = {},
     onNavigateToCollection: (Long) -> Unit = {}
 ) {
-    val collectionSummaries = remember { MockData.sampleCollections }
+    val dbViewModel: DatabaseViewModel = viewModel()
+    val lists by dbViewModel.allLists.collectAsStateWithLifecycle()
+
+    MainScreenScaffold(
+        lists = lists,
+        wordCountFor = { id -> dbViewModel.getWordCountForList(id) },
+        sentenceCountFor = { id -> dbViewModel.getSentenceCountForList(id) },
+        onDeleteList = { dbViewModel.deleteList(it) },
+        onNavigateToTranslation = onNavigateToTranslation,
+        onNavigateToWordLookup = onNavigateToWordLookup,
+        onNavigateToCollection = onNavigateToCollection
+    )
+}
+
+// ──────────────────────────────────────
+// Main Screen — Stateless gövde (preview edilebilir)
+// ──────────────────────────────────────
+@Composable
+private fun MainScreenScaffold(
+    lists: List<WordListEntity>,
+    wordCountFor: (Long) -> Flow<Int>,
+    sentenceCountFor: (Long) -> Flow<Int>,
+    onDeleteList: (WordListEntity) -> Unit,
+    onNavigateToTranslation: () -> Unit,
+    onNavigateToWordLookup: () -> Unit,
+    onNavigateToCollection: (Long) -> Unit
+) {
+    // Silme onayı bekleyen liste
+    var pendingDelete by remember { mutableStateOf<WordListEntity?>(null) }
+
+    pendingDelete?.let { target ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            containerColor = CardBackgroundMedium,
+            title = {
+                Text(
+                    text = "Delete list?",
+                    color = White,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = LexendFontFamily
+                )
+            },
+            text = {
+                Text(
+                    text = "\"${target.name}\" and all its saved words will be permanently deleted.",
+                    color = SubtleTextColor,
+                    fontFamily = LexendFontFamily
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onDeleteList(target)
+                    pendingDelete = null
+                }) {
+                    Text(text = "Delete", color = GradientGoldStart, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDelete = null }) {
+                    Text(text = "Cancel", color = SubtleTextColor)
+                }
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -193,11 +265,14 @@ fun MainScreenContent(
                 title = "My Collections"
             )
             MyCollectionsSection(
-                collections = collectionSummaries,
-                onCollectionClick = onNavigateToCollection
+                collections = lists,
+                wordCountFor = wordCountFor,
+                sentenceCountFor = sentenceCountFor,
+                onCollectionClick = onNavigateToCollection,
+                onCollectionLongPress = { pendingDelete = it }
             )
 
-            // ── Section 4: Community Collections ──
+            // ── Section 4: Community Collections (yakında) ──
             SectionTitle(
                 icon = "🌍",
                 title = "Community Collections"
@@ -436,8 +511,11 @@ private fun WordLookupCard(onClick: () -> Unit) {
 // ──────────────────────────────────────
 @Composable
 private fun MyCollectionsSection(
-    collections: List<CollectionSummary>,
-    onCollectionClick: (Long) -> Unit
+    collections: List<WordListEntity>,
+    wordCountFor: (Long) -> Flow<Int>,
+    sentenceCountFor: (Long) -> Flow<Int>,
+    onCollectionClick: (Long) -> Unit,
+    onCollectionLongPress: (WordListEntity) -> Unit
 ) {
     if (collections.isEmpty()) {
         // Empty state
@@ -491,10 +569,15 @@ private fun MyCollectionsSection(
             }
         }
     } else {
-        collections.forEach { collection ->
+        collections.forEach { list ->
+            val wordCount by wordCountFor(list.id).collectAsStateWithLifecycle(initialValue = 0)
+            val sentenceCount by sentenceCountFor(list.id).collectAsStateWithLifecycle(initialValue = 0)
             CollectionCard(
-                collection = collection,
-                onClick = { onCollectionClick(collection.id) }
+                list = list,
+                wordCount = wordCount,
+                sentenceCount = sentenceCount,
+                onClick = { onCollectionClick(list.id) },
+                onLongPress = { onCollectionLongPress(list) }
             )
         }
     }
@@ -503,8 +586,23 @@ private fun MyCollectionsSection(
 // ──────────────────────────────────────
 // Collection Card
 // ──────────────────────────────────────
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun CollectionCard(collection: CollectionSummary, onClick: () -> Unit) {
+private fun CollectionCard(
+    list: WordListEntity,
+    wordCount: Int,
+    sentenceCount: Int,
+    onClick: () -> Unit,
+    onLongPress: () -> Unit
+) {
+    val listColor = remember(list.color) {
+        try {
+            Color(android.graphics.Color.parseColor(list.color))
+        } catch (e: Exception) {
+            GradientTealStart
+        }
+    }
+
     Surface(
         modifier = Modifier
             .padding(horizontal = 16.dp)
@@ -513,13 +611,16 @@ private fun CollectionCard(collection: CollectionSummary, onClick: () -> Unit) {
                 width = 1.dp,
                 brush = Brush.linearGradient(
                     colors = listOf(
-                        GradientTealStart.copy(alpha = 0.3f),
-                        GradientTealEnd.copy(alpha = 0.1f)
+                        listColor.copy(alpha = 0.4f),
+                        listColor.copy(alpha = 0.15f)
                     )
                 ),
                 shape = RoundedCornerShape(14.dp)
             )
-            .clickable { onClick() },
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongPress
+            ),
         color = CardBackgroundMedium,
         shape = RoundedCornerShape(14.dp)
     ) {
@@ -534,54 +635,43 @@ private fun CollectionCard(collection: CollectionSummary, onClick: () -> Unit) {
                 modifier = Modifier
                     .size(48.dp)
                     .background(
-                        Brush.linearGradient(
-                            colors = listOf(GradientTealStart.copy(alpha = 0.2f), GradientTealEnd.copy(alpha = 0.1f))
-                        ),
+                        color = listColor.copy(alpha = 0.18f),
                         shape = CircleShape
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                Text(text = "📚", fontSize = 22.sp)
+                Text(text = list.emoji, fontSize = 22.sp)
             }
 
             Spacer(modifier = Modifier.width(14.dp))
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = collection.name,
+                    text = list.name,
                     color = White,
                     fontSize = 17.sp,
                     fontWeight = FontWeight.SemiBold,
                     fontFamily = LexendFontFamily
                 )
                 Spacer(modifier = Modifier.height(4.dp))
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text(
-                        text = "${collection.sentenceCount} sentence${if (collection.sentenceCount != 1) "s" else ""}",
-                        color = SubtleTextColor,
-                        fontSize = 13.sp,
-                        fontFamily = LexendFontFamily
-                    )
-                    Text(
-                        text = "•",
-                        color = SubtleTextColor,
-                        fontSize = 13.sp
-                    )
-                    Text(
-                        text = "${collection.wordCount} word${if (collection.wordCount != 1) "s" else ""}",
-                        color = SubtleTextColor,
-                        fontSize = 13.sp,
-                        fontFamily = LexendFontFamily
-                    )
+                val countText = buildString {
+                    append("$wordCount word${if (wordCount != 1) "s" else ""}")
+                    if (sentenceCount > 0) {
+                        append(" · $sentenceCount sentence${if (sentenceCount != 1) "s" else ""}")
+                    }
                 }
+                Text(
+                    text = countText,
+                    color = SubtleTextColor,
+                    fontSize = 13.sp,
+                    fontFamily = LexendFontFamily
+                )
             }
 
             // Arrow
             Text(
                 text = "→",
-                color = GradientTealStart,
+                color = listColor,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -671,7 +761,20 @@ private fun CommunitySection() {
 @Preview(showBackground = true)
 @Composable
 fun MainScreenPreview() {
+    val sampleLists = listOf(
+        WordListEntity(id = 1L, name = "Favorites", emoji = "❤️", color = "#EC4899"),
+        WordListEntity(id = 2L, name = "Travel", emoji = "✈️", color = "#0D9488"),
+        WordListEntity(id = 3L, name = "Work", emoji = "💼", color = "#6366F1")
+    )
     NosiTheme {
-        MainScreenContent()
+        MainScreenScaffold(
+            lists = sampleLists,
+            wordCountFor = { flowOf(12) },
+            sentenceCountFor = { flowOf(3) },
+            onDeleteList = {},
+            onNavigateToTranslation = {},
+            onNavigateToWordLookup = {},
+            onNavigateToCollection = {}
+        )
     }
 }

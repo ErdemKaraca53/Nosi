@@ -1,60 +1,54 @@
 package com.erdem.nosi.ViewModels
 
-import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.erdem.nosi.Network.AutoCompleteApi
 import com.erdem.nosi.data.AutoCompleteResponse
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.lang.Exception
 
 class AutoCompleteViewModel : ViewModel() {
-    var count = 0
+
     private val _uiState = MutableStateFlow<AutoCompleteUiState>(AutoCompleteUiState.Idle)
     val uiState = _uiState.asStateFlow()
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery = _searchQuery.asStateFlow()
 
-    private var currenSuggestion : List<AutoCompleteResponse> = emptyList()
+    private var currentSuggestions: List<AutoCompleteResponse> = emptyList()
 
-    // Kullanıcı her yazdığında burası çağrılacak
+    // Her tuş vuruşunda yeni istek atmamak için debounce job'ı
+    private var searchJob: Job? = null
+
+    /**
+     * Kullanıcı her yazdığında çağrılır.
+     * Önceki bekleyen aramayı iptal eder, 300ms sessizlik sonrası API'ye gider (debounce).
+     */
     fun onSearchQueryChanged(query: String) {
-        _searchQuery.value = query   // ← TextField ile senkronizasyon için
+        _searchQuery.value = query   // TextField ile senkronizasyon
+
+        searchJob?.cancel()
 
         if (query.length < 2) {
             _uiState.value = AutoCompleteUiState.Idle
             return
         }
 
-        getAutoCompleteSuggestions(query)
-    }
-
-    fun getAutoCompleteSuggestions(query: String) {
-        /*
-        Burada yaptığımız şey sealed class ile durumları genelleştirmek
-        Burada her durum için sealed class'ta bir karşılık var.
-        Bu karşılıkların içi sealed class kullanımında devreye giriyor.
-         */
-        count++
-        viewModelScope.launch {
-            _uiState.value = AutoCompleteUiState.Loading(currenSuggestion)
-            //delay(300)
+        searchJob = viewModelScope.launch {
+            delay(300)  // debounce: kullanıcı yazmayı bırakana kadar bekle
+            _uiState.value = AutoCompleteUiState.Loading(currentSuggestions)
             try {
                 val response = AutoCompleteApi.retrofitService.GetSuggestions(query)
-                currenSuggestion = response
-
-                Log.e("sayac", "total count: $count")
-                if (response.isEmpty()) {
-                    _uiState.value = AutoCompleteUiState.Error("No suggestions found")
+                currentSuggestions = response
+                _uiState.value = if (response.isEmpty()) {
+                    AutoCompleteUiState.Error("No suggestions found")
                 } else {
-                    _uiState.value = AutoCompleteUiState.Success(response)
+                    AutoCompleteUiState.Success(response)
                 }
-
-            } catch (e: kotlin.Exception) {
+            } catch (e: Exception) {
                 _uiState.value = AutoCompleteUiState.Error(e.message ?: "Unknown error")
             }
         }
@@ -63,18 +57,14 @@ class AutoCompleteViewModel : ViewModel() {
 
 sealed class AutoCompleteUiState {
 
-    //Parametresiz durumlar için bellek ve performans
-    /*
-    Idle'ın İşlevi:
-    Idle durumu, kullanıcının bir eylem (örneğin metin girip arama butonuna basma)
-    yapmasını bekleyen pasif ekranlar için kullanılır.
-     */
+    /** Kullanıcının yazmasını bekleyen pasif durum. */
     data object Idle : AutoCompleteUiState()
+
+    /** Yeni sonuç beklenirken eski önerileri tutar (titremeyi önler). */
     data class Loading(
-        val oldSuggestion : List<AutoCompleteResponse> = emptyList()
+        val oldSuggestion: List<AutoCompleteResponse> = emptyList()
     ) : AutoCompleteUiState()
 
-    //Veri taşıyan durumlar için
     data class Success(
         val suggestions: List<AutoCompleteResponse>
     ) : AutoCompleteUiState()

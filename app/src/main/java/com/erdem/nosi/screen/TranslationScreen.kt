@@ -30,16 +30,17 @@ import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -52,6 +53,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -61,8 +63,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.erdem.nosi.R
-import com.erdem.nosi.model.MockData
+import com.erdem.nosi.ViewModels.DatabaseViewModel
+import com.erdem.nosi.ViewModels.TranslationUiState
+import com.erdem.nosi.ViewModels.TranslationViewModel
 import com.erdem.nosi.model.TranslationData
 import com.erdem.nosi.ui.theme.CardBackgroundDark
 import com.erdem.nosi.ui.theme.CardBackgroundMedium
@@ -119,15 +125,21 @@ fun GradientDivider(modifier: Modifier = Modifier) {
 // ──────────────────────────────────────
 
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TranslationScaffol(onNavigateBack: () -> Unit = {}) {
 
-    var inputText by remember { mutableStateOf("") }
-    var saveState by remember { mutableStateOf("IDLE") }
-    val hasInput = inputText.isNotBlank()
+    val translationViewModel: TranslationViewModel = viewModel()
+    val dbViewModel: DatabaseViewModel = viewModel()
+    val uiState by translationViewModel.uiState.collectAsStateWithLifecycle()
+    val allLists by dbViewModel.allLists.collectAsStateWithLifecycle()
+    val keyboard = LocalSoftwareKeyboardController.current
 
-    // Mock: gerçek implementasyonda burada API/DB çağrısı olacak
-    val translationData = if (hasInput) MockData.sampleTranslationData else null
+    var inputText by remember { mutableStateOf("") }
+    var showSaveSheet by remember { mutableStateOf(false) }
+
+    val data = (uiState as? TranslationUiState.Success)?.data
+    val translatedSentence = data?.translations?.firstOrNull()?.translatedSentence.orEmpty()
 
     Scaffold(
         topBar = {
@@ -147,53 +159,109 @@ fun TranslationScaffol(onNavigateBack: () -> Unit = {}) {
         ) {
             Spacer(modifier = Modifier.height(16.dp))
 
-            // ── Compact Input Card ──
+            // ── Input Card ──
             LiveInputCard(
                 inputText = inputText,
                 onInputChange = {
                     inputText = it
-                    saveState = "IDLE"
+                    if (it.isBlank()) translationViewModel.reset()
                 },
                 onClear = {
                     inputText = ""
-                    saveState = "IDLE"
-                }
+                    translationViewModel.reset()
+                },
+                onTranslate = {
+                    keyboard?.hide()
+                    translationViewModel.translate(inputText)
+                },
+                isTranslating = uiState is TranslationUiState.Loading
             )
 
-            // ── Instant Results ──
-            AnimatedVisibility(
-                visible = translationData != null,
-                enter = fadeIn(tween(300)) + expandVertically(tween(350)),
-                exit = fadeOut(tween(200)) + shrinkVertically(tween(250))
-            ) {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(20.dp)
-                ) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    translationData?.let { data ->
-                        TransletedSentence(translationData = data)
-
-                        SaveTranslationButton(
-                            saveState = saveState,
-                            onSave = { saveState = "SAVING" }
-                        )
-
-                        LaunchedEffect(saveState) {
-                            if (saveState == "SAVING") {
-                                delay(1000)
-                                saveState = "SUCCESS"
-                            }
+            when (val state = uiState) {
+                is TranslationUiState.Loading -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 48.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(40.dp),
+                                color = GradientTealStart,
+                                strokeWidth = 3.dp
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = "Translating...",
+                                color = SectionHeaderColor,
+                                fontSize = 15.sp,
+                                fontFamily = LexendFontFamily
+                            )
                         }
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
+                is TranslationUiState.Success -> {
+                    Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        TransletedSentence(translationData = state.data, isPremium = true)
+                        SaveTranslationButton(
+                            saveState = "IDLE",
+                            onSave = { if (translatedSentence.isNotBlank()) showSaveSheet = true }
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
+
+                is TranslationUiState.Error -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 32.dp, vertical = 48.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(text = "⚠️", fontSize = 40.sp)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = state.message,
+                            color = SubtleTextColor,
+                            fontSize = 14.sp,
+                            fontFamily = LexendFontFamily,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 20.sp
+                        )
+                    }
+                }
+
+                TranslationUiState.Idle -> {
+                    if (inputText.isBlank()) EmptyStateHint()
                 }
             }
-
-            // ── Empty State ──
-            if (!hasInput) {
-                EmptyStateHint()
-            }
         }
+    }
+
+    // ── Save Sheet: çevrilen cümleyi bir listeye kaydet ──
+    if (showSaveSheet) {
+        SaveToListBottomSheet(
+            word = "Sentence",
+            partOfSpeech = "translation",
+            existingLists = allLists,
+            savedListIds = emptyList(),
+            onDismiss = { showSaveSheet = false },
+            onSaveToList = { listId ->
+                dbViewModel.saveSentence(listId, inputText.trim(), translatedSentence)
+                showSaveSheet = false
+                onNavigateBack()
+            },
+            onCreateAndSave = { name, emoji, color ->
+                dbViewModel.createList(name, emoji, color) { id ->
+                    dbViewModel.saveSentence(id, inputText.trim(), translatedSentence)
+                }
+                showSaveSheet = false
+                onNavigateBack()
+            }
+        )
     }
 }
 
@@ -204,7 +272,9 @@ fun TranslationScaffol(onNavigateBack: () -> Unit = {}) {
 fun LiveInputCard(
     inputText: String,
     onInputChange: (String) -> Unit,
-    onClear: () -> Unit
+    onClear: () -> Unit,
+    onTranslate: () -> Unit,
+    isTranslating: Boolean
 ) {
     Surface(
         modifier = Modifier
@@ -315,6 +385,9 @@ fun LiveInputCard(
                 keyboardOptions = KeyboardOptions(
                     imeAction = ImeAction.Done
                 ),
+                keyboardActions = KeyboardActions(
+                    onDone = { onTranslate() }
+                ),
                 maxLines = 4,
                 minLines = 1
             )
@@ -331,6 +404,44 @@ fun LiveInputCard(
                     fontFamily = LexendFontFamily,
                     textAlign = TextAlign.End
                 )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // ── Çevir butonu ──
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(
+                        if (inputText.isNotBlank()) {
+                            Brush.linearGradient(listOf(GradientTealStart, GradientTealEnd))
+                        } else {
+                            Brush.linearGradient(listOf(CardBorderColor, CardBorderColor))
+                        }
+                    )
+                    .clickable(
+                        enabled = inputText.isNotBlank() && !isTranslating,
+                        onClick = onTranslate
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                if (isTranslating) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        color = White,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text(
+                        text = "Translate  ✦",
+                        color = if (inputText.isNotBlank()) White else SubtleTextColor,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = LexendFontFamily
+                    )
+                }
             }
         }
     }
@@ -1047,7 +1158,7 @@ fun SaveTranslationButton(saveState: String, onSave: () -> Unit) {
                     horizontalArrangement = Arrangement.Center
                 ) {
                     Text(
-                        text = "Save Translation",
+                        text = "Save Words to List",
                         color = White,
                         fontSize = 17.sp,
                         fontWeight = FontWeight.SemiBold,

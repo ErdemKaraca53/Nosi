@@ -1,13 +1,15 @@
 package com.erdem.nosi.screen
 
-import android.app.Application
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,17 +19,17 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -43,19 +45,21 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.tooling.preview.Preview
-import com.erdem.nosi.ui.theme.NosiTheme
-import com.erdem.nosi.model.SavedWordEntity
-import com.erdem.nosi.model.MockData
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.erdem.nosi.ViewModels.DatabaseViewModel
+import com.erdem.nosi.model.StudyWord
 import com.erdem.nosi.ui.theme.CardBackgroundDark
 import com.erdem.nosi.ui.theme.CardBackgroundMedium
 import com.erdem.nosi.ui.theme.CardBorderColor
 import com.erdem.nosi.ui.theme.GlowTeal
 import com.erdem.nosi.ui.theme.GradientTealEnd
 import com.erdem.nosi.ui.theme.GradientTealStart
+import com.erdem.nosi.ui.theme.NosiTheme
 import com.erdem.nosi.ui.theme.SectionHeaderColor
 import com.erdem.nosi.ui.theme.SubtleTextColor
 import com.erdem.nosi.ui.theme.White
@@ -63,19 +67,56 @@ import kotlinx.coroutines.launch
 import kotlin.math.absoluteValue
 import kotlin.math.roundToInt
 
-// View model deleted
-
 // ──────────────────────────────────────
-// Study Screen
+// Study Screen — Stateful
 // ──────────────────────────────────────
 @Composable
 fun StudyScreen(
     collectionId: Long,
     onNavigateBack: () -> Unit = {}
 ) {
+    val dbViewModel: DatabaseViewModel = viewModel()
+
+    val liveWords by dbViewModel.getStudyWordsForList(collectionId)
+        .collectAsStateWithLifecycle(initialValue = emptyList())
+    val allLists by dbViewModel.allLists.collectAsStateWithLifecycle()
+
+    val collectionName = allLists.find { it.id == collectionId }?.name ?: "Study"
+
+    // Deste seans boyunca sabit kalsın (az bilinenler önce). Mastery güncellemeleri
+    // DB'ye yazılır ama ekrandaki sıra seans içinde karışmaz.
+    var deck by remember { mutableStateOf<List<StudyWord>>(emptyList()) }
+    LaunchedEffect(liveWords) {
+        if (deck.isEmpty() && liveWords.isNotEmpty()) {
+            deck = liveWords.sortedBy { it.masteryLevel }
+        }
+    }
+
+    StudyContent(
+        collectionName = collectionName,
+        words = deck,
+        onKnown = { word ->
+            dbViewModel.setMastery(word.id, (word.masteryLevel + 1).coerceAtMost(StudyWord.MASTERY_MAX))
+        },
+        onNeedsReview = { word ->
+            dbViewModel.setMastery(word.id, 0)
+        },
+        onNavigateBack = onNavigateBack
+    )
+}
+
+// ──────────────────────────────────────
+// Study — Stateless gövde
+// ──────────────────────────────────────
+@Composable
+private fun StudyContent(
+    collectionName: String,
+    words: List<StudyWord>,
+    onKnown: (StudyWord) -> Unit,
+    onNeedsReview: (StudyWord) -> Unit,
+    onNavigateBack: () -> Unit
+) {
     var currentIndex by remember { mutableIntStateOf(0) }
-    val words = remember { MockData.sampleWordsFor101 }
-    val collectionName = remember { MockData.sampleCollections.find { it.id == collectionId }?.name ?: "Study" }
 
     Scaffold(
         topBar = {
@@ -123,7 +164,7 @@ fun StudyScreen(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "You've reviewed all ${words.size} words",
+                            text = "You've reviewed all ${words.size} word${if (words.size != 1) "s" else ""}",
                             color = SubtleTextColor,
                             fontSize = 16.sp,
                             fontFamily = LexendFontFamily,
@@ -152,7 +193,6 @@ fun StudyScreen(
                 }
 
                 else -> {
-                    // Card stack + swipe
                     Column(
                         modifier = Modifier.fillMaxSize(),
                         horizontalAlignment = Alignment.CenterHorizontally
@@ -172,8 +212,10 @@ fun StudyScreen(
                         val offsetX = remember { Animatable(0f) }
                         val screenWidth = LocalConfiguration.current.screenWidthDp
                         val swipeThreshold = screenWidth * 0.35f
-                        // Sürükleme ilerlemesi (0 = durağan, 1 = tam atılmış)
                         val dragProgress = (offsetX.value.absoluteValue / swipeThreshold).coerceIn(0f, 1f)
+
+                        // Aktif kartın "çevrilmiş" (anlam görünür) durumu — her kelimede sıfırlanır
+                        var revealed by remember(currentIndex) { mutableStateOf(false) }
 
                         Box(
                             modifier = Modifier
@@ -181,13 +223,13 @@ fun StudyScreen(
                                 .fillMaxWidth(),
                             contentAlignment = Alignment.Center
                         ) {
-                            // Deste efekti — alttaki kartlar hafif açılı ve kaymış
                             val remaining = words.size - currentIndex
 
                             // 3. kart (en altta)
                             if (remaining > 3) {
                                 FlashCard(
                                     word = words[currentIndex + 3],
+                                    revealed = false,
                                     modifier = Modifier
                                         .graphicsLayer {
                                             rotationZ = 5f
@@ -198,10 +240,11 @@ fun StudyScreen(
                                 )
                             }
 
-                            // 2. kart — sürükleme ilerledikçe hafifçe düzeliyor
+                            // 2. kart
                             if (remaining > 2) {
                                 FlashCard(
                                     word = words[currentIndex + 2],
+                                    revealed = false,
                                     modifier = Modifier
                                         .graphicsLayer {
                                             rotationZ = -3f + (dragProgress * 1f)
@@ -212,10 +255,11 @@ fun StudyScreen(
                                 )
                             }
 
-                            // 1. kart — sürükleme ilerledikçe ön plana geçiyor
+                            // 1. kart
                             if (remaining > 1) {
                                 FlashCard(
                                     word = words[currentIndex + 1],
+                                    revealed = false,
                                     modifier = Modifier
                                         .graphicsLayer {
                                             rotationZ = 2f * (1f - dragProgress)
@@ -226,7 +270,7 @@ fun StudyScreen(
                                 )
                             }
 
-                            // Aktif kart (swipeable)
+                            // Aktif kart (swipe + tap-to-flip)
                             Box(
                                 modifier = Modifier
                                     .offset { IntOffset(offsetX.value.roundToInt(), 0) }
@@ -237,11 +281,16 @@ fun StudyScreen(
                                         scaleY = scale
                                     }
                                     .pointerInput(currentIndex) {
+                                        detectTapGestures(onTap = { revealed = !revealed })
+                                    }
+                                    .pointerInput(currentIndex) {
                                         detectHorizontalDragGestures(
                                             onDragEnd = {
                                                 scope.launch {
                                                     when {
                                                         offsetX.value > swipeThreshold -> {
+                                                            // Sağa → "öğrendim"
+                                                            onKnown(words[currentIndex])
                                                             offsetX.animateTo(
                                                                 targetValue = screenWidth * 2f,
                                                                 animationSpec = tween(200)
@@ -250,6 +299,8 @@ fun StudyScreen(
                                                             offsetX.snapTo(0f)
                                                         }
                                                         offsetX.value < -swipeThreshold -> {
+                                                            // Sola → "tekrar et"
+                                                            onNeedsReview(words[currentIndex])
                                                             offsetX.animateTo(
                                                                 targetValue = -screenWidth * 2f,
                                                                 animationSpec = tween(200)
@@ -274,7 +325,7 @@ fun StudyScreen(
                                         )
                                     }
                             ) {
-                                FlashCard(word = words[currentIndex])
+                                FlashCard(word = words[currentIndex], revealed = revealed)
                             }
                         }
 
@@ -286,7 +337,7 @@ fun StudyScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = "← Skip",
+                                text = "← Review",
                                 color = SubtleTextColor.copy(alpha = 0.6f),
                                 fontSize = 14.sp,
                                 fontFamily = LexendFontFamily
@@ -306,83 +357,13 @@ fun StudyScreen(
 }
 
 // ──────────────────────────────────────
-// Swipeable Flash Card
+// Flash Card (iskambil kartı şeklinde, iki yüzlü)
 // ──────────────────────────────────────
-@Composable
-private fun SwipeableFlashCard(
-    word: SavedWordEntity,
-    onSwipedLeft: () -> Unit,
-    onSwipedRight: () -> Unit
-) {
-    val scope = rememberCoroutineScope()
-    val offsetX = remember { Animatable(0f) }
-    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
-
-    // Swipe threshold
-    val swipeThreshold = screenWidth.value * 0.35f
-
-    Box(
-        modifier = Modifier
-            .offset { IntOffset(offsetX.value.roundToInt(), 0) }
-            .graphicsLayer {
-                // Kartı döndür (sürükleme mesafesine göre)
-                rotationZ = (offsetX.value / 40f).coerceIn(-15f, 15f)
-                // Hafif ölçek efekti
-                val scale = 1f - (offsetX.value.absoluteValue / 3000f).coerceIn(0f, 0.05f)
-                scaleX = scale
-                scaleY = scale
-            }
-            .pointerInput(word) {
-                detectHorizontalDragGestures(
-                    onDragEnd = {
-                        scope.launch {
-                            when {
-                                offsetX.value > swipeThreshold -> {
-                                    // Sağa atıldı → animasyonla ekran dışına çık
-                                    offsetX.animateTo(
-                                        targetValue = screenWidth.value * 2f,
-                                        animationSpec = tween(200)
-                                    )
-                                    onSwipedRight()
-                                    offsetX.snapTo(0f)
-                                }
-                                offsetX.value < -swipeThreshold -> {
-                                    // Sola atıldı → animasyonla ekran dışına çık
-                                    offsetX.animateTo(
-                                        targetValue = -screenWidth.value * 2f,
-                                        animationSpec = tween(200)
-                                    )
-                                    onSwipedLeft()
-                                    offsetX.snapTo(0f)
-                                }
-                                else -> {
-                                    // Yetersiz sürükleme → geri dön
-                                    offsetX.animateTo(
-                                        targetValue = 0f,
-                                        animationSpec = tween(400)
-                                    )
-                                }
-                            }
-                        }
-                    },
-                    onHorizontalDrag = { _, dragAmount ->
-                        scope.launch {
-                            offsetX.snapTo(offsetX.value + dragAmount)
-                        }
-                    }
-                )
-            }
-    ) {
-        FlashCard(word = word)
-    }
-}
-
-// ──────────────────────────────────────
-// Flash Card (iskambil kartı şeklinde)
-// ──────────────────────────────────────
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun FlashCard(
-    word: SavedWordEntity,
+    word: StudyWord,
+    revealed: Boolean,
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -398,59 +379,42 @@ private fun FlashCard(
         color = CardBackgroundMedium,
         shape = RoundedCornerShape(20.dp)
     ) {
-        Box(
-            modifier = Modifier.fillMaxSize()
-        ) {
-            // Üst köşe süsü (iskambil tarzı)
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(16.dp)
-            ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            // Üst köşe süsü
+            Box(modifier = Modifier.align(Alignment.TopStart).padding(16.dp)) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        text = word.pos.take(3).uppercase(),
+                        text = word.partOfSpeech.take(3).uppercase(),
                         color = GradientTealStart,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = LexendFontFamily,
                         letterSpacing = 1.sp
                     )
-                    Text(
-                        text = "♦",
-                        color = GradientTealStart,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Text(text = "♦", color = GradientTealStart, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
-            // Alt köşe süsü (ters iskambil tarzı)
+            // Alt köşe süsü (düz okunur — ters değil)
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(16.dp)
-                    .graphicsLayer { rotationZ = 180f }
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        text = word.pos.take(3).uppercase(),
+                        text = word.partOfSpeech.take(3).uppercase(),
                         color = GradientTealStart.copy(alpha = 0.4f),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = LexendFontFamily,
                         letterSpacing = 1.sp
                     )
-                    Text(
-                        text = "♦",
-                        color = GradientTealStart.copy(alpha = 0.4f),
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Text(text = "♦", color = GradientTealStart.copy(alpha = 0.4f), fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
-            // Kart ortası — kelime bilgileri
+            // Orta içerik
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -463,15 +427,13 @@ private fun FlashCard(
                     modifier = Modifier
                         .size(56.dp)
                         .background(
-                            Brush.linearGradient(
-                                colors = listOf(GradientTealStart, GradientTealEnd)
-                            ),
+                            Brush.linearGradient(listOf(GradientTealStart, GradientTealEnd)),
                             shape = CircleShape
                         ),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = (word.lemma.ifBlank { word.word }).take(1).uppercase(),
+                        text = word.word.take(1).uppercase(),
                         color = White,
                         fontSize = 24.sp,
                         fontWeight = FontWeight.Bold
@@ -480,9 +442,9 @@ private fun FlashCard(
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                // Kelime (lemma)
+                // Kelime
                 Text(
-                    text = word.lemma.ifBlank { word.word },
+                    text = word.word.replaceFirstChar { it.uppercase() },
                     color = White,
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold,
@@ -499,7 +461,7 @@ private fun FlashCard(
                 ) {
                     Text(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                        text = word.pos,
+                        text = word.partOfSpeech,
                         color = GradientTealStart,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -507,7 +469,7 @@ private fun FlashCard(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(20.dp))
 
                 // Orta çizgi
                 Box(
@@ -516,27 +478,93 @@ private fun FlashCard(
                         .height(2.dp)
                         .background(
                             Brush.linearGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    CardBorderColor,
-                                    Color.Transparent
-                                )
+                                colors = listOf(Color.Transparent, CardBorderColor, Color.Transparent)
                             )
                         )
                 )
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(20.dp))
 
-                // Türkçe anlam
-                Text(
-                    text = word.meaningTr,
-                    color = SectionHeaderColor,
-                    fontSize = 18.sp,
-                    fontFamily = LexendFontFamily,
-                    fontWeight = FontWeight.Normal,
-                    textAlign = TextAlign.Center,
-                    lineHeight = 26.sp
-                )
+                // Ön yüz: ipucu — Arka yüz: anlam(lar)
+                if (!revealed) {
+                    Text(
+                        text = "👆 Tap to reveal meaning",
+                        color = SubtleTextColor.copy(alpha = 0.7f),
+                        fontSize = 14.sp,
+                        fontFamily = LexendFontFamily,
+                        textAlign = TextAlign.Center
+                    )
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState()),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        // Türkçe anlam — birincil (varsa)
+                        if (word.meaningTr.isNotBlank()) {
+                            Text(
+                                text = word.meaningTr,
+                                color = White,
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = LexendFontFamily,
+                                textAlign = TextAlign.Center,
+                                lineHeight = 28.sp
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                        }
+
+                        // İngilizce tanım(lar) — ikincil
+                        if (word.definitions.isEmpty() && word.meaningTr.isBlank()) {
+                            Text(
+                                text = "No meaning saved",
+                                color = SubtleTextColor,
+                                fontSize = 15.sp,
+                                fontFamily = LexendFontFamily,
+                                textAlign = TextAlign.Center
+                            )
+                        } else {
+                            word.definitions.take(2).forEachIndexed { index, def ->
+                                if (index > 0) Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = def,
+                                    color = SectionHeaderColor,
+                                    fontSize = 14.sp,
+                                    fontFamily = LexendFontFamily,
+                                    fontWeight = FontWeight.Normal,
+                                    textAlign = TextAlign.Center,
+                                    lineHeight = 20.sp,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+
+                        if (word.synonyms.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(14.dp))
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                word.synonyms.take(4).forEach { syn ->
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(GradientTealStart.copy(alpha = 0.12f))
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(
+                                            text = syn,
+                                            color = GradientTealStart,
+                                            fontSize = 11.sp,
+                                            fontFamily = LexendFontFamily
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -545,7 +573,33 @@ private fun FlashCard(
 @Preview(showBackground = true)
 @Composable
 fun StudyScreenPreview() {
+    val sampleWords = listOf(
+        StudyWord(
+            id = 1L,
+            word = "run",
+            partOfSpeech = "verb",
+            meaningTr = "koşmak",
+            definitions = listOf("Move at a speed faster than a walk.", "To manage or be in charge of."),
+            synonyms = listOf("sprint", "dash", "operate"),
+            antonyms = listOf("walk")
+        ),
+        StudyWord(
+            id = 2L,
+            word = "idea",
+            partOfSpeech = "noun",
+            meaningTr = "fikir",
+            definitions = listOf("A thought or suggestion as to a possible course of action."),
+            synonyms = listOf("concept", "notion"),
+            antonyms = emptyList()
+        )
+    )
     NosiTheme {
-        StudyScreen(collectionId = 1L)
+        StudyContent(
+            collectionName = "Favorites",
+            words = sampleWords,
+            onKnown = {},
+            onNeedsReview = {},
+            onNavigateBack = {}
+        )
     }
 }

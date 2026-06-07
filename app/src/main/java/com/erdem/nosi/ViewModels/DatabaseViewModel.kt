@@ -4,8 +4,12 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.erdem.nosi.database.AppDatabase
+import com.erdem.nosi.database.SavedSentenceEntity
 import com.erdem.nosi.database.WordListEntity
+import com.erdem.nosi.model.StudyWord
 import com.erdem.nosi.repository.WordRepository
+import com.erdem.nosi.translate.WordTranslator
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -20,7 +24,7 @@ import kotlinx.coroutines.launch
 class DatabaseViewModel(application: Application) : AndroidViewModel(application) {
 
     private val db = AppDatabase.getDatabase(application)
-    private val repository = WordRepository(db.wordListDao(), db.savedWordDao())
+    private val repository = WordRepository(db.wordListDao(), db.savedWordDao(), db.savedSentenceDao())
 
     // ── Tüm listeler (her yerden erişilebilir StateFlow) ────────────────────
     val allLists: StateFlow<List<WordListEntity>> = repository.getAllLists()
@@ -58,6 +62,30 @@ class DatabaseViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    // ── Listedeki Kelimeler (Koleksiyon Detay + Çalışma) ─────────────────────
+
+    /** Listedeki kelimeleri (JSON çözülmüş) Flow olarak döndürür */
+    fun getStudyWordsForList(listId: Long): Flow<List<StudyWord>> =
+        repository.getStudyWordsForList(listId)
+
+    /** Bir listedeki kelime sayısını Flow olarak döndürür */
+    fun getWordCountForList(listId: Long): Flow<Int> =
+        repository.getWordCountForList(listId)
+
+    /** Kaydedilmiş bir kelimeyi listeden siler */
+    fun deleteWord(wordId: Long) {
+        viewModelScope.launch {
+            repository.deleteWordById(wordId)
+        }
+    }
+
+    /** Çalışma ekranından öğrenme seviyesini günceller (SRS) */
+    fun setMastery(wordId: Long, level: Int) {
+        viewModelScope.launch {
+            repository.setMastery(wordId, level)
+        }
+    }
+
     // ── Kelime Kaydetme ───────────────────────────────────────────────────────
 
     /**
@@ -80,10 +108,13 @@ class DatabaseViewModel(application: Application) : AndroidViewModel(application
     ) {
         _saveState.value = SaveWordState.Saving
         viewModelScope.launch {
+            // Kelimeyi Türkçeye çevir (başarısız olursa boş geçeriz, akış bozulmaz)
+            val meaningTr = WordTranslator.toTurkish(word).orEmpty()
             val success = repository.saveWord(
                 listId = listId,
                 word = word,
                 partOfSpeech = partOfSpeech,
+                meaningTr = meaningTr,
                 definitions = definitions,
                 synonyms = synonyms,
                 antonyms = antonyms
@@ -93,6 +124,30 @@ class DatabaseViewModel(application: Application) : AndroidViewModel(application
             } else {
                 SaveWordState.AlreadyExists
             }
+        }
+    }
+
+    // ── Cümle İşlemleri (çeviri ekranı) ──────────────────────────────────────
+
+    /** Çeviriden gelen cümleyi (kaynak + çeviri) belirtilen listeye kaydeder */
+    fun saveSentence(listId: Long, sourceText: String, translatedText: String) {
+        viewModelScope.launch {
+            repository.saveSentence(listId, sourceText, translatedText)
+        }
+    }
+
+    /** Bir listedeki kayıtlı cümleleri Flow olarak döndürür */
+    fun getSentencesForList(listId: Long): Flow<List<SavedSentenceEntity>> =
+        repository.getSentencesForList(listId)
+
+    /** Bir listedeki cümle sayısını Flow olarak döndürür */
+    fun getSentenceCountForList(listId: Long): Flow<Int> =
+        repository.getSentenceCountForList(listId)
+
+    /** Kayıtlı bir cümleyi siler */
+    fun deleteSentence(sentenceId: Long) {
+        viewModelScope.launch {
+            repository.deleteSentenceById(sentenceId)
         }
     }
 

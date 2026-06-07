@@ -36,6 +36,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -51,11 +52,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.erdem.nosi.audio.PronunciationPlayer
 import com.erdem.nosi.ViewModels.DatabaseViewModel
 import com.erdem.nosi.ViewModels.DictionaryUiState
 import com.erdem.nosi.ViewModels.DictionaryViewModel
@@ -81,7 +84,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun DictionaryResultScreen(
     word: String,
-    onNavigateBack: () -> Unit = {}
+    onNavigateBack: () -> Unit = {},
+    onWordSaved: () -> Unit = {}
 ) {
     val dictViewModel: DictionaryViewModel = viewModel()
     val dbViewModel: DatabaseViewModel = viewModel()
@@ -102,12 +106,13 @@ fun DictionaryResultScreen(
         dictViewModel.getDictionary(word)
     }
 
-    // Kayıt başarılı olunca sheet'i kapat
+    // Kayıt tamamlanınca sheet'i kapat ve ana sayfaya dön (aradaki ekranları stack'ten at)
     LaunchedEffect(saveWordState) {
         if (saveWordState is SaveWordState.Saved || saveWordState is SaveWordState.AlreadyExists) {
             scope.launch { sheetState.hide() }.invokeOnCompletion {
                 showSaveSheet = false
                 dbViewModel.resetSaveState()
+                onWordSaved()
             }
         }
     }
@@ -155,6 +160,18 @@ fun DictionaryResultScreen(
                         selectedMeaning = meaning
                         showSaveSheet = true
                     },
+                    modifier = Modifier
+                        .padding(innerPadding)
+                        .background(color = CardBackgroundDark)
+                        .fillMaxSize()
+                )
+            }
+
+            is DictionaryUiState.Error -> {
+                DictionaryErrorContent(
+                    message = state.message,
+                    onRetry = { dictViewModel.retry(word) },
+                    onBack = onNavigateBack,
                     modifier = Modifier
                         .padding(innerPadding)
                         .background(color = CardBackgroundDark)
@@ -209,6 +226,72 @@ fun DictionaryResultScreen(
     }
 }
 
+// ─── Hata İçeriği (kelime bulunamadı / bağlantı hatası) ─────────────────────
+@Composable
+private fun DictionaryErrorContent(
+    message: String,
+    onRetry: () -> Unit,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(32.dp)
+        ) {
+            Text(text = "🔍", fontSize = 56.sp)
+            Spacer(modifier = Modifier.height(20.dp))
+            Text(
+                text = message,
+                color = White,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.SemiBold,
+                fontFamily = LexendFontFamily,
+                textAlign = TextAlign.Center,
+                lineHeight = 24.sp
+            )
+            Spacer(modifier = Modifier.height(28.dp))
+
+            // Tekrar dene
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Brush.linearGradient(listOf(GradientGoldStart, GradientGoldEnd)))
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() }
+                    ) { onRetry() }
+                    .padding(horizontal = 32.dp, vertical = 14.dp)
+            ) {
+                Text(
+                    text = "Try Again",
+                    color = White,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = LexendFontFamily
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Geri dön
+            Text(
+                text = "Go Back",
+                color = SubtleTextColor,
+                fontSize = 14.sp,
+                fontFamily = LexendFontFamily,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() }
+                    ) { onBack() }
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+        }
+    }
+}
+
 // ─── Sonuç İçeriği (POS Seçici + Kart) ──────────────────────────────────────
 @Composable
 private fun DictionaryResultContent(
@@ -232,6 +315,24 @@ private fun DictionaryResultContent(
     var selectedIndex by remember(posTypes) {
         val nounIndex = posTypes.indexOfFirst { it.equals("noun", ignoreCase = true) }
         mutableIntStateOf(if (nounIndex >= 0) nounIndex else 0)
+    }
+
+    // Fonetik yazım ve telaffuz ses dosyası (API'den, varsa)
+    val phoneticText = remember(responses) {
+        responses.firstNotNullOfOrNull { r ->
+            r.phonetic?.takeIf { it.isNotBlank() }
+                ?: r.phonetics.firstOrNull { !it.text.isNullOrBlank() }?.text
+        }
+    }
+    val audioUrl = remember(responses) {
+        responses.firstNotNullOfOrNull { r ->
+            r.phonetics.firstOrNull { it.audio.isNotBlank() }?.audio
+        }
+    }
+
+    // Ekrandan çıkınca çalan sesi durdur
+    DisposableEffect(Unit) {
+        onDispose { PronunciationPlayer.stop() }
     }
 
     Column(
@@ -280,6 +381,39 @@ private fun DictionaryResultContent(
                 fontFamily = LexendFontFamily,
                 letterSpacing = 0.5.sp
             )
+
+            // ── Fonetik + Telaffuz butonu ──
+            if (!phoneticText.isNullOrBlank() || audioUrl != null) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (!phoneticText.isNullOrBlank()) {
+                        Text(
+                            text = phoneticText,
+                            color = GradientTealStart,
+                            fontSize = 16.sp,
+                            fontFamily = LexendFontFamily
+                        )
+                    }
+                    if (audioUrl != null) {
+                        if (!phoneticText.isNullOrBlank()) {
+                            Spacer(modifier = Modifier.width(10.dp))
+                        }
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(GradientTealStart.copy(alpha = 0.15f))
+                                .clickable(
+                                    indication = null,
+                                    interactionSource = remember { MutableInteractionSource() }
+                                ) { PronunciationPlayer.play(audioUrl) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(text = "🔊", fontSize = 18.sp)
+                        }
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.height(6.dp))
 
