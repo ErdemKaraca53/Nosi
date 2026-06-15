@@ -124,14 +124,26 @@ private fun StudyContent(
 ) {
     val speak = rememberWordSpeaker()
 
-    // Aktif çalışma destesi (tüm liste / "tekrar et" alt kümesi olabilir)
+    // Aktif çalışma destesi (tüm liste / "tekrar et" alt kümesi olabilir).
+    // Tüm state 'words'e göre anahtarlanır; restart/review işlemleri startSession ile
+    // açıkça sıfırlanır (sessionDeck değerinin eşitliğine güvenmeyiz — aksi halde aynı
+    // listeyi yeniden atamak recomposition tetiklemez ve butonlar çalışmaz).
     var sessionDeck by remember(words) { mutableStateOf(words) }
-    var currentIndex by remember(sessionDeck) { mutableIntStateOf(0) }
+    var currentIndex by remember(words) { mutableIntStateOf(0) }
 
     // Seans istatistikleri
-    var knownCount by remember(sessionDeck) { mutableIntStateOf(0) }
-    var reviewCount by remember(sessionDeck) { mutableIntStateOf(0) }
-    val reviewAgain = remember(sessionDeck) { mutableStateListOf<StudyWord>() }
+    var knownCount by remember(words) { mutableIntStateOf(0) }
+    var reviewCount by remember(words) { mutableIntStateOf(0) }
+    val reviewAgain = remember(words) { mutableStateListOf<StudyWord>() }
+
+    // Yeni bir seans başlat: desteyi değiştir ve tüm ilerlemeyi sıfırla.
+    fun startSession(newDeck: List<StudyWord>) {
+        sessionDeck = newDeck
+        currentIndex = 0
+        knownCount = 0
+        reviewCount = 0
+        reviewAgain.clear()
+    }
 
     Scaffold(
         topBar = {
@@ -170,11 +182,10 @@ private fun StudyContent(
                         reviewCount = reviewCount,
                         canReviewMissed = reviewAgain.isNotEmpty(),
                         onReviewMissed = {
-                            val missed = reviewAgain.toList()
-                            sessionDeck = missed   // remember(sessionDeck) → index/sayaç sıfırlanır
+                            startSession(reviewAgain.toList())  // kopya alınır; clear() etkilemez
                         },
                         onRestartAll = {
-                            sessionDeck = words
+                            startSession(words)
                         }
                     )
                 }
