@@ -48,6 +48,7 @@ fun AppNavigation() {
                 animationSpec = tween(900)
             )
         },
+
         // Çıkış: aşağıdan yukarıya kapanma + fade out
         exitTransition = {
             shrinkVertically(
